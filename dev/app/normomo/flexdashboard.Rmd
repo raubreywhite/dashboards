@@ -1,0 +1,211 @@
+---
+title: "NorMOMO"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    social: menu
+    smooth_scroll: true
+    theme: cosmo
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(ggplot2)
+library(data.table)
+library(fhi)
+library(shiny)
+
+availableDataSets <- rev(list.files("/data_app/normomo/","zip"))
+
+data <- data.table(readRDS(file = "/data_app/normomo/data.RDS"))
+w <- data.table(date=seq.Date(as.Date("2000-01-01"),as.Date("2030-01-01"),1))
+w[,wk2:=format.Date(date,"%G-%V")]
+w <- w[,.(date=max(date)),by=wk2]
+data <- merge(data,w,by="wk2")
+data[,status:="Normal"]
+data[nbc>=UPIb2,status:="Medium"]
+data[nbc>=UPIb4,status:="High"]
+data <- data[wk2!=max(wk2) & wk2!=min(wk2)]
+
+ages <- c("Totalt"="Total","0-4"="0to4","5-14"="5to14","15-64"="15to64","65+"="65P")
+weeks <- rev(unique(data$wk2))
+dateMin <- min(data$date)
+dateMax <- max(data$date)
+
+```
+
+```{r, include=FALSE}
+
+
+GetCols <- reactive({
+  retval <- c('#fc8d59','#ffffbf','#91cf60')
+  if(!is.null(input$colourBlind)){
+    if(input$colourBlind){
+      retval <- c('#fc8d59','#ffffbf','#91bfdb')
+    } 
+  }
+  return(retval)
+})
+
+GetCols5 <- reactive({
+  retval <- c('#e41a1c','#377eb8','#4daf4a','#984ea3','#ff7f00')
+  if(!is.null(input$colourBlind)){
+    if(input$colourBlind){
+      retval <- c('#e41a1c','#377eb8','#4daf4a','#984ea3','#ff7f00')
+    } 
+  }
+  return(retval)
+})
+
+ 
+```
+
+Grafer og data
+===================================== 
+
+
+Row 
+-----------------------------------------------------------------------
+
+```{r, include=FALSE}
+  ValueBoxLast8Weeks <- function(){
+    data[data$wk>=max(data$wk)-7,]
+  }
+  
+  ValueBoxLast8WeeksTotal <- function(){
+    x <- ValueBoxLast8Weeks()
+    x[x$GROUP=="Total",]
+  }
+
+```  
+
+### døde i de siste 8 ukene {.no-mobile}
+
+```{r, echo = F}
+val <- round(sum(ValueBoxLast8WeeksTotal()$nbc))
+valueBox(val, icon = "fa-male", color="primary")
+```
+
+### forventet døde i de siste 8 ukene {.no-mobile}
+
+```{r, echo = F}
+val <- round(sum(ValueBoxLast8WeeksTotal()$Pnb))
+valueBox(val, icon = "fa-male", color="primary")
+```
+
+### uker med høyere enn forventet dødlighet i de siste 8 ukene
+
+```{r, echo = F}
+val <- length(unique(ValueBoxLast8Weeks()[ValueBoxLast8Weeks()$nbc > ValueBoxLast8Weeks()$UPIb2]$wk))
+valueBox(val, 
+         icon = ifelse(val > 0, "fa-times", "fa-check"),
+         color = ifelse(val > 0, "#feb24c", "primary"))
+```
+
+Row {data-height=800}
+-----------------------------------------------------------------------
+
+```{r, include=FALSE}
+weeklyGraphPlotDataBrushed <- reactive({
+  if(is.null(input$weeklyGraphAgeBrushed)) return(NULL)
+  retData <- data[data$GROUP == input$weeklyGraphAgeBrushed,]
+  retData$top <- max(c(retData$nbc, retData$UPIb4), na.rm = T) + 2
+  retData$bottom <- max(c(0,min(c(retData$nbc-2,retData$LPIc-2), na.rm = T)))
+  if (nrow(retData) == 0) retData <- NULL
+  
+  return(retData)
+})
+
+output$weeklyGraphPlotBrushedSelector <- renderPlot({
+  pd <- weeklyGraphPlotDataBrushed() 
+  
+  if(is.null(pd)){
+    return(
+      data.frame(x=1:3,y=1:3) %>%
+        ggplot(aes(x=x,y=y)) + 
+        geom_points(alpha=0)
+    )
+  }
+  
+  MakeLineBrushPlot(pd,x="date",dataVal="nbc",L2="threshold2",L3="threshold4", GetCols=GetCols)
+  
+})
+
+output$weeklyGraphPlotBrushedGraph <- renderPlot({
+  pd <- weeklyGraphPlotDataBrushed() 
+  
+  if(is.null(pd)){
+    return(
+      data.frame(x=1:3,y=1:3) %>%
+        ggplot(aes(x=x,y=y)) + 
+        geom_points(alpha=0)
+    )
+  }
+  
+  if(!is.null(input$plotBrush)){
+    pd <- pd[pd$date>=input$plotBrush$xmin & pd$date<=input$plotBrush$xmax,]
+  }
+  
+  MakeLineThresholdPlot(pd,x="date",dataVal="nbc",dataCIL="LPIc",dataCIU="UPIc",L1="bottom",L2="UPIb2",L3="UPIb4",L4="top", pointShift = -3.5, weekNumbers=TRUE, GetCols = GetCols)
+  
+})
+  
+```
+
+### 
+
+```{r, echo = F}
+plotOutput("weeklyGraphPlotBrushedGraph")
+```
+
+Select {data-height=200}
+-----------------------------------------------------------------------
+
+### 
+
+```{r, echo = F}
+plotOutput("weeklyGraphPlotBrushedSelector", brush = brushOpts("plotBrush", direction="x", opacity=0.4))
+```
+
+Instillinger {.sidebar}
+-----------------------------------------------------------------------
+
+```{r, echo = F}
+
+selectInput("weeklyGraphAgeBrushed", label = "Alder", as.list(ages), selected = "Total", selectize=FALSE, size=length(ages))
+
+selectInput("selectData", "Results", as.list(availableDataSets), selectize=TRUE)
+
+downloadHandler(
+  filename <- function() {
+    input$selectData
+  },
+  content <- function(fname){
+    file.copy(paste0("/data_app/normomo/",input$selectData),fname)
+  },
+  contentType = "application/zip"
+)
+```
+
+Anonyme data/sensurering av data
+===================================== 
+
+Row 
+-----------------------------------------------------------------------
+
+### 
+
+NorMOMO publiserer kun aggregerte tall. Av personvernsyn sensureres små tall etter sterkere regler som anvendes for aggregerte tall hos SSB. Vi bruker et fem trinn prosess for å sørge for anonyme data:
+
+1. Alle data punkter med antall tilfeller større enn eller lik 3 får et tilfeldig tall mellom -3 og 3 lagt til dem
+
+2. Alle data punkter som har blitt skiftet over en signifikansgrense (pga tilfeldige tallet) blir set til gresnen minus en
+
+3. Alle data punkter som har blitt skiftet under en signifikansgrense (pga tilfeldige tallet) blir set til gresnen
+
+4. Alle data punkter med antall tilfeller mindre enn 3 blir sett til 0
+
+5. Alle data punkter med befolkningssegment på færre enn 10 personer blir sett til 0
+
+

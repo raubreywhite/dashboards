@@ -1,0 +1,92 @@
+---
+output: word_document
+params:
+  reportYear: 2015
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(ggvis)
+library(ggplot2)
+library(data.table)
+library(ggrepel)
+
+data <- readRDS(file = "data/data.RDS")
+
+fileSources = file.path("code",list.files("code",pattern="*.[rR]$"))
+sapply(fileSources,source,.GlobalEnv)
+```
+
+# Tuberkulose i Norge __`r params$reportYear`__-med behandlingsresultater for __`r params$reportYear-1`__
+
+Trude M Arnesen
+
+Kari Åse Eide
+
+Gunnstein Norheim
+
+Anne Torunn Mengshoel
+
+Synne Sandbu
+
+Brita Winje
+
+## Hovedpunkter
+
+De senere årene har det vært en jevn stigning i forekomst av tuberkulose i Norge, fra __`r sum(data[cyear==1996]$isActive,na.rm=T)`__ tilfeller i 1996 til __`r sum(data[cyear==params$reportYear]$isActive,na.rm=T)`__ i __`r params$reportYear`__. Av de som fikk tuberkulose var __`r sum(data[cyear==params$reportYear & isForeignBorn==0]$isActive,na.rm=T)`__ født i Norge og __`r sum(data[cyear==params$reportYear & cNorwegianStatusNB=="Norskfødt med to norskfødte foreldre"]$isActive,na.rm=T)`__ hadde to norskfødte foreldre. Insidensen blant norskfødte var i __`r params$reportYear`__ blant de laveste i verden, på under ett tilfelle per 100 000 innbyggere.   
+Insidens av tuberkulose varierer i stor grad med forekomst i fødelandet. Langt de fleste tilfeller av tuberkulose i Norge skyldes reaktivering av latent (sovende) smitte fra land med høy forekomst av tuberkulose, ikke nysmitte i Norge. Blant afrikanskfødte som bor i Norge, var insidensen X/100 000 (__`r sum(data[cyear==params$reportYear & cFverdNB=="Afrika"]$isActive,na.rm=T)`__/DENOM), altså 250 ganger så høy som for norskfødte.
+
+Av de utenlandsfødte der vi har informasjon om oppholdstid i Norge, er den for __`r round(sum(data[cyear==params$reportYear & isForeignBorn==1 & cPernorNB=="Under ett år i Norge"]$isActive,na.rm=T) / sum(data[cyear==params$reportYear & isForeignBorn==1 & cPernorNB%in%c("Under ett år i Norge","Ett til fire år i Norge","5 år eller mer i Norge")]$isActive,na.rm=T)*100)`__% under ett år.  
+
+Det var meldt om tuberkulose hos __`r sum(data[cyear==params$reportYear & isForeignBorn==0 & cAlgr %in% c("0-9","10-19")]$isActive,na.rm=T)`__ norskfødte barn under 20 år i __`r params$reportYear`__. Av disse, __`r sum(data[cyear==params$reportYear & isForeignBorn==0 & cAlgr %in% c("0-9","10-19") & cNorwegianStatusNB=="Norskfødt med minst en utenlandsfødt forelder"]$isActive,na.rm=T)`__ hadde minst én utenlandsfødt forelder.
+
+Bare noen få av de som blir smittet av tuberkulose blir syke.  Denne andelen kan reduseres ytterligere ved forebyggende medikamentell behandling. __`r sum(data[cyear==params$reportYear]$isLatentTB,na.rm=T)`__ friske personer med tuberkulosesmitte fikk forebyggende behandling i __`r params$reportYear`__. 
+
+Årets tuberkulosestatistikk kommer ca et halvt år tidligere enn den har gjort før, og behandlingsstatitstikken er derfor mindre fullstendig.
+
+### Kort om tuberkuloseregisteret (Last updated 2015)
+Dataene i årsrapporten er hentet fra det sentrale Tuberkuloseregisteret. Det er basert på meldinger fra leger og laboratorier (inkl. Nasjonalt referanselaboratorium for mykobakterier ved FHI), som melder separat til MSIS (Meldesystem for infeksjonssykdommer). Meldeplikten følger av MSIS- og Tuberkuloseregisterforskriftens kapittel 2 (2).  Meldesystemet er nærmere beskrevet i «Veileder for forebygging og kontroll av tuberkulose» (3). Pasientene telles i det året laboratorieprøve med oppvekst av M.tuberculosis er tatt. Pasienter uten slik dyrkningsbekreftelse, dvs. at de bare er meldt av lege og ikke av laboratorium, telles i året for registrering i MSIS tuberkuloseregisteret. 
+
+Tuberkulosesykdom og oppstart av forebyggende behandling for latent tuberkulose er i Norge meldepliktig til MSIS. Latent tuberkulose som ikke behandles, er ikke meldepliktig. 
+
+### Kvalitetssikring av dataene i tuberkuloseregisteret (Text last updated 2015)
+Det legges ned mye arbeide i å kvalitetssikre tuberkuloseregisteret, og databasen oppdateres kontinuerlig. 
+
+En viktig kvalitetssikring består i å sammenholde de meldte tuberkulosetilfellene med foreskrevne tuberkulosemedikamenter. Sykehusapotekene har etter tuberkuloseforskriften plikt til å sende informasjon til Folkehelseinstituttet når medikamentene rifampicin og isoniazid utleveres.
+
+Disse er, med noen få unntak, forbeholdt behandling av tuberkulose. Listene over utskrevet tuberkulosemedisin sjekkes mot meldte tilfeller av tuberkulose og meldte tilfeller av forebyggende behandling ved latent infeksjon. I __`r params$reportYear`__ ble det purret på både aktiv sykdom og forebyggende behandling ved latent infeksjon. Det ble etter reseptpurring funnet X tilfeller av tuberkulose og X tilfeller av forebyggende behandling som ikke var meldt.
+
+Et annet viktig arbeid for å sikre kvaliteten består i å se at alle tilfeller som er meldt fra laboratoriene også er meldt fra behandlende lege. Der det mangler klinikermelding purres det hovedsakelig skriftlig. I __`r params$reportYear`__ ble det purret skriftlig på manglende klinikermelding forX pasienter. Det ble i tillegg foretatt mange muntlige purringer over telefon til tuberkulosekoordinator, både etter skriftlig purring og som eneste purring på enkelte meldinger. 
+
+Ved feil utfylling eller ved utfylling på gammelt skjema, sendes skjemaene i retur eller det ringes til tuberkulosekoordinator ved de enkelte sykehus vedrørende manglende opplysninger. I noen tilfeller er det nødvendig med gjentatte purringer. 
+
+På grunn av den kontinuerlige oppdateringen av databasen, kan det forekomme forskjeller i datasett som er hentet ut på ulike tidspunkter. 
+ 
+## Tuberkulose i __`r params$reportYear`__
+### Utviklingstrekk (Text last updated 2015)
+Historisk sett har tuberkulose vært en av sykdommene som har tatt aller flest liv og leveår. Statistisk Sentralbyrå anslår at i 1900 var omtrent hvert femte dødsfall i Norge forårsaket av tuberkulose, og at 60 prosent av de døde var under 30 år. Utover 1900-tallet sank dødeligheten betydelig, og det anslås at sykdommen i 1940 forårsaket omtrent hvert 20. dødsfall. Det er i dag svært sjelden at noen dør av tuberkulose i Norge. 
+
+Det har vært en tilsvarende reduksjon av forekomsten. Det året det var registrert færrest tilfeller av tuberkulose i Norge var i 1996, da det ble meldt __`r sum(data[cyear==1996]$isActive,na.rm=T)`__ tilfeller. 
+
+Etter 1996 har det imidlertid vært en jevn stigning i forekomst av tuberkulose i Norge. I __`r params$reportYear`__ ble det meldt __`r sum(data[cyear==params$reportYear]$isActive,na.rm=T)`__ tilfeller som er en foreløpig topp i dette århundret (figur 1). 
+
+De siste årenes økning i antall tuberkulosetilfeller henger sammen med økt innvandring fra land med høy forekomst. De fleste som får tuberkulose i Norge i dag er smittet av tuberkulose før ankomst til Norge.
+
+Man har altså gått fra en situasjon på 1970 og -80-tallet hvor utenlandsfødte bare utgjorde en marginal andel av tuberkulosetilfellene, til den omvendte situasjonen i dag hvor det er de norskfødte tuberkulosepasienter som er sjeldne.  
+
+Figur 1. Tuberkulosetilfeller meldt MSIS __`r params$reportYear-34`__-__`r params$reportYear`__ etter fødested
+```{r, fig.width=8.27*1.5, fig.height=11.69/2*1.5, dpi=300, results="asis", echo=FALSE}
+suppressWarnings(Figure1(data[cyear<=input$reportYear], relSize=0.85, moreSpace=TRUE))
+```
+
+```{r, fig.width=8.27*1.5, fig.height=11.69/2*1.5, dpi=300, results="asis", echo=FALSE}
+suppressWarnings(Figure2(data[cyear<=input$reportYear], relSize=0.85, moreSpace=TRUE))
+```
+
+```{r, fig.width=8.27*1.5, fig.height=11.69/2*1.5, dpi=300, results="asis", echo=FALSE}
+suppressWarnings(Figure3(data[cyear<=input$reportYear], relSize=0.85, moreSpace=TRUE))
+```
+
+```{r, fig.width=8.27*1.5, fig.height=11.69/2*1.5, dpi=300, results="asis", echo=FALSE}
+suppressWarnings(Figure4(data[cyear<=input$reportYear], relSize=0.85, moreSpace=TRUE))
+```

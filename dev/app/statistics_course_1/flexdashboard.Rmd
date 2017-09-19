@@ -1,0 +1,209 @@
+---
+title: "SMHB Statistics Course 1"
+output: 
+  flexdashboard::flex_dashboard:
+    vertical_layout: scroll
+    css: styles.css
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(ggvis)
+library(ggplot2)
+library(data.table)
+library(dashboardgraphs)
+library(shinyBS)
+
+
+```
+
+
+Home
+===================================== 
+
+### Welcome to SMHB's statistics course 1 
+
+Please go to the `r a('Questionnaire',href='#section-questionnaire')` page to fill out what you are interested in.
+
+Questionnaire
+===================================== 
+
+
+```{r, include=FALSE}
+if(!dir.exists("data/responses")) dir.create("data/responses",recursive=TRUE)
+HumanTime <- function() format(Sys.time(), "%Y-%m-%d")
+
+v <- reactiveValues(submitted="Submit",responses=NULL)
+
+GetLatestResponse <- function(){
+  lastVal <- list.files("data/responses")
+  if(length(lastVal)==0){
+    lastVal <- 0
+  } else {
+    lastVal <- as.numeric(gsub(".RDS$","",lastVal))
+  }
+  lastVal <- max(lastVal)+1
+  lastVal <- formatC(lastVal,width=8,flag="0")
+  return(lastVal)
+}
+
+fieldsAll <- c(
+  "name",
+  "email",
+  "department",
+  "levelStatistics",
+  "levelR",
+  "levelSTATA",
+  "levelSPSS",
+  "coursesMonths",
+  "coursesStatistics",
+  "coursesBioinformatics"
+)
+
+fieldsMandatory <- c(
+  "name",
+  "email",
+  "department"
+)
+
+isMandatoryFilled <- reactive({
+  # check if all mandatory fields have a value
+  mandatoryFilled <-
+    vapply(fieldsMandatory,
+           function(x) {
+             !is.null(input[[x]]) && input[[x]] != ""
+           },
+           logical(1))
+  mandatoryFilled <- all(mandatoryFilled) & v$submitted=="Submit"
+  
+  return(mandatoryFilled)
+  # enable/disable the submit button
+  #shinyjs::toggleState(id = "submit", condition = mandatoryFilled)
+})
+
+observeEvent(input$submit, ({
+  #data <- formData()
+  retval <- list()
+  for(i in fieldsAll){
+    if(!is.null(input[[i]])){
+      retval[[i]] <- input[[i]]
+    } else {
+      retval[[i]] <- ""
+    }
+  }
+  retval[["dayOpened"]] <- HumanTime()
+  retval[["id"]] <- GetLatestResponse()
+  saveRDS(retval,file.path("data","responses",paste0(retval[["id"]],".RDS")))
+  v$submitted <- "Submitted"
+}))
+
+```
+
+### {data-width=10000 data-height=700}
+
+```{r}
+
+div(class="sidepadding",
+
+div(id="center-div",   
+  br(),
+  
+  textInput("name", "Ditt navn", value = "", width = '300', placeholder = NULL),
+  
+  br(),
+  
+  textInput("email", "Epost addresse", value = "", width = '300', placeholder = NULL),
+  
+  br(),
+  
+  textInput("department", "Avdelingen", value = "", width = '300', placeholder = NULL)
+),
+br(),p("****",align="center"),br(),
+
+radioButtons("levelStatistics", "Statistics level", choices = list(
+  "None",
+  "Beginner",
+  "Competent",
+  "Advanced"
+), width = '100%',inline=T),
+
+br(),
+
+radioButtons("levelR", "R level", choices = list(
+  "None",
+  "Beginner",
+  "Competent",
+  "Advanced"
+), width = '100%',inline=T),
+
+br(),
+
+radioButtons("levelSTATA", "STATA level", choices = list(
+  "None",
+  "Beginner",
+  "Competent",
+  "Advanced"
+), width = '100%',inline=T),
+
+br(),
+
+radioButtons("levelSPSS", "SPSS level", choices = list(
+  "None",
+  "Beginner",
+  "Competent",
+  "Advanced"
+), width = '100%',inline=T),
+
+br(),p("****",align="center"),br(),
+
+checkboxGroupInput("coursesMonths", "Prefered dates", choices = list(
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September"
+), width = '100%',inline=T),
+
+br(),
+
+checkboxGroupInput("coursesStatistics", "Bioinformatics courses", choices = list(
+  "?",
+  "?",
+  "?",
+  "?",
+  "?",
+  "?"
+), width = '100%',inline=T),
+
+br(),
+
+checkboxGroupInput("coursesMonths", "Statistics courses", choices = list(
+  "Intro to R",
+  "Linear regression",
+  "Logistic regression",
+  "Survival analysis",
+  "Poisson regression",
+  "Categorical data and contigency tables",
+  "Study design",
+  "Sample size calculation"
+), width = '100%',inline=T),
+br()
+)
+
+```
+
+
+### {data-height=200}
+
+```{r}
+renderUI({
+  div(class="containerx",
+    div(class="blockx",bsButton("submit", v$submitted, class = "btn-primary",disabled=!isMandatoryFilled()))
+  )
+})
+```
+
+
+

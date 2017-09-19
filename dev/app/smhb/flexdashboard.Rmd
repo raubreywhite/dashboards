@@ -1,0 +1,435 @@
+---
+title: "SMHB"
+output: 
+  flexdashboard::flex_dashboard:
+    vertical_layout: scroll
+    css: styles.css
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(ggvis)
+library(ggplot2)
+library(data.table)
+library(dashboardgraphs)
+library(shinyBS)
+
+status <- c("Unassigned","Active","Closed")
+
+responsible <- c(
+  "Unassigned"="Unassigned",
+  "Elmira Flem"="elfl",
+  "Richard White"="riwh",
+  "Torbjørn Wisløff"="towi"
+)
+
+admin <- c("riwh")
+
+var <- list.files("data/passwords")
+passwords <- vector("list",length=length(responsible))
+for(i in 2:length(responsible)){
+  if(sum(responsible[i] %in% var)==0){
+    pwFile <- list("username"=responsible[i],"password"=digest::sha1("hello"))
+    saveRDS(pwFile,file.path("data","passwords",paste0(responsible[i],".RDS")))
+  }
+  passwords[[i]] <- readRDS(file.path("data","passwords",paste0(responsible[i],".RDS")))
+}
+
+```
+
+
+Hjem
+===================================== 
+
+
+### Welcome to SMHB
+
+```{r}
+print(getwd())
+```
+
+
+Instillinger {.sidebar}
+-----------------------------------------------------------------------
+
+Surveillance links
+
+```{r}
+a("MSIS",href="../msis/",target="_blank")
+```
+
+```{r}
+a("NorMOMO",href="../normomo/",target="_blank")
+```
+
+```{r}
+a("Sykdomspuls",href="../sykdomspuls/",target="_blank")
+```
+
+Søk om rådgivning
+===================================== 
+
+```{r, include=FALSE}
+if(!dir.exists("data/responses")) dir.create("data/responses",recursive=TRUE)
+HumanTime <- function() format(Sys.time(), "%Y-%m-%d")
+
+v <- reactiveValues(submitted="Submit",responses=NULL)
+
+GetLatestResponse <- function(){
+  lastVal <- list.files("data/responses")
+  if(length(lastVal)==0){
+    lastVal <- 0
+  } else {
+    lastVal <- as.numeric(gsub(".RDS$","",lastVal))
+  }
+  lastVal <- max(lastVal)+1
+  lastVal <- formatC(lastVal,width=8,flag="0")
+  return(lastVal)
+}
+
+fieldsAll <- c(
+  "name",
+  "email",
+  "phone",
+  "department",
+  "projectTitle",
+  "projectSupervisor",
+  "projectTimeSensitive",
+  "projectDuration",
+  "projectStatus",
+  "projectDescription",
+  "projectType",
+  "projectCategory"
+)
+
+fieldsMandatory <- fieldsAll
+
+formData <- reactive({
+  retval <- list()
+  for(i in fieldsAll){
+    if(!is.null(input[[i]])) retval[[i]] <- input[[i]]
+  }
+  retval[["time"]] <- HumanTime()
+  return(retval)
+})
+
+isMandatoryFilled <- reactive({
+  # check if all mandatory fields have a value
+  mandatoryFilled <-
+    vapply(fieldsMandatory,
+           function(x) {
+             !is.null(input[[x]]) && input[[x]] != ""
+           },
+           logical(1))
+  mandatoryFilled <- all(mandatoryFilled) & v$submitted=="Submit"
+  
+  return(mandatoryFilled)
+  # enable/disable the submit button
+  #shinyjs::toggleState(id = "submit", condition = mandatoryFilled)
+})
+
+observeEvent(input$submit, ({
+  #data <- formData()
+  retval <- list()
+  for(i in fieldsAll){
+    if(!is.null(input[[i]])){
+      retval[[i]] <- input[[i]]
+    } else {
+      retval[[i]] <- ""
+    }
+  }
+  retval[["dayOpened"]] <- HumanTime()
+  retval[["dayClosed"]] <- ""
+  retval[["hoursWorked"]] <- 0
+  retval[["status"]] <- "Unassigned"
+  retval[["responsible"]] <- "Unassigned"
+  retval[["id"]] <- GetLatestResponse()
+  saveRDS(retval,file.path("data","responses",paste0(retval[["id"]],".RDS")))
+  v$submitted <- "Submitted"
+}))
+
+```
+
+### {data-width=10000 data-height=1700}
+
+```{r}
+
+div(class="sidepadding",
+
+div(id="center-div",
+  br(),
+  
+  textInput("name", "Ditt navn/Name", value = "", width = '300', placeholder = NULL),
+  
+  br(),
+  
+  textInput("email", "Epost addresse/Email", value = "", width = '300', placeholder = NULL),
+  
+  br(),
+  
+  textInput("phone", "Telefon nummer/Phone number", value = "", width = '300', placeholder = NULL),
+  
+  br(),
+  
+  textInput("department", "Avdelingen/Department", value = "", width = '300', placeholder = NULL)
+),
+
+br(),
+p("****",align="center"),
+br(),
+
+div(id="center-div",
+  textInput("projectTitle", "Prosjekt tittel/Project title", value = "", width = '300', placeholder = NULL),
+  
+  br(),
+  
+  textInput("projectSupervisor", "Prosjektleder/Project leader", value = "", width = '300', placeholder = "Name, title, affiliation"),
+  
+  br(),
+  
+  selectInput("projectTimeSensitive", "Tidsensitiv (f.eks utbrudd)/Time sensitive", choices = list("Nei/No"="No","Ja/Yes"="Yes"), width = '300'),
+  
+  br(),
+  
+  selectInput("projectDuration", "Prosjekt lengde (mnd)/Project duration (months)", choices = as.list(1:60), width = '300')
+),
+
+br(),
+
+radioButtons("projectStatus", "Prosjekt status/Project status", list(
+  "Planlegging/Planning stage"="Planning",
+  "Data innsamling/Data collection stage"="Data collection",
+  "Data analyser/Data analysis stage"="Analysis",
+  "Publikasjoner/Publication stage"="Publication"
+), selected = NULL, inline = F,
+  width = '300'),
+
+br(),
+
+div(id="center-div",
+  textAreaInput("projectDescription", "Beskrivelse av prosjektet/Project description", value = "", width = 500, height=400, resize="both", placeholder = "1) Prosjektets mål. 2) Data (kilde, antall pasienter, utfall type). 3) Hva slags metoder du vil bruke. Maks 250 ord. / 1) Object of project. 2) Data (source, number of pt, type of outcome). 3) Methods you want to use. Max 250 words.")
+),
+
+br(),
+p("****",align="center"),
+br(),
+
+radioButtons("projectType", "Hva trenger du hjelp med?/Where do you need help?", list(
+  "Bioinformatikk/Bioinformatics"="Bioinformatics",
+  "Epidemiologi/Epidemiology"="Epidemiology",
+  "Helseøkonomi/Health economics"="Health economics",
+  "Smittesykdomer modellering/Infectious disease modelling"="Modelling",
+  "Statistikk/Statistics"="Statistics",
+  "Rekruttering+spørsmål utvikling/Recruitment+questionnaire design"="Recruitment"
+), selected = NULL, inline = F,
+  width = '450'),
+
+br(),
+
+radioButtons("projectCategory", "Hjelp type/Type of help", list(
+  "Rådgiving/Consulting"="Consulting",
+  "Samarbeid - ikke kjør analyser/Collaborating - not running analyses"="Collab, no analyses",
+  "Samarbeid - kjør analyser/Collaborating - running analyses"="Collab, analyses",
+  "Vet ikke/Don't know"="Don't know"
+), selected = NULL, inline = F,
+  width = '450')
+
+)
+
+```
+
+
+### {data-height=200}
+
+```{r}
+renderUI({
+  div(class="containerx",
+    div(class="blockx",bsButton("submit", v$submitted, class = "btn-primary",disabled=!isMandatoryFilled()))
+  )
+})
+```
+
+
+Admin
+===================================== 
+
+### {data-width=10000 data-height=120}
+
+```{r}
+textInput("username", NULL, value = "", width = '300', placeholder = "Enter username for admin access")
+passwordInput("password", NULL, value = "", width = '300', placeholder = "Enter password for admin access")
+```
+
+### {data-width=10000}
+
+```{r, include=FALSE}
+isAdmin <- reactive({
+  if(is.null(input$password) | is.null(input$username)) return(FALSE)
+  desiredPassword <- ""
+  for(i in 2:length(passwords)){
+    if(input$username==passwords[[i]]$username){
+      desiredPassword <- passwords[[i]]$password
+    }
+  }
+  if(!digest::sha1(input$password) == desiredPassword) return(FALSE)
+  if(sum(input$username %in% admin)>0) return(TRUE)
+  return(input$username)
+})  
+
+```
+
+```{r}
+av <- reactiveValues(data=NULL,displayData=NULL,selectedData=NULL,responsible=NULL)
+
+RefreshData <- function(){
+  var <- list.files("data/responses")
+  if(length(var)==0) return(NULL)
+  data <- vector("list",length(var))
+  displayData <- vector("list",length(var))
+  for(i in 1:length(data)){
+    data[[i]] <- readRDS(file.path("data/responses",var[i]))
+    displayData[[i]] <- as.data.frame(data[[i]])
+  }
+  displayData <- rbindlist(displayData)
+  
+  av$data <- data
+  
+
+  displayData <- displayData[,c(
+    "id",
+    "status",
+    "responsible",
+    "hoursWorked",
+    "name",
+    "email",
+    "phone",
+    "department",
+    "projectTitle",
+    "projectSupervisor",
+    "projectTimeSensitive",
+    "projectDuration",
+    "projectStatus",
+    "projectType",
+    "projectCategory"
+    ),with=F]
+  setnames(displayData,c(
+    "ID",
+    "Status",
+    "Responsible",
+    "Hrs",
+    "Name",
+    "Email",
+    "Phone",
+    "Dept",
+    "Title",
+    "Supervisor",
+    "Urgent",
+    "Months",
+    "Stage",
+    "Group",
+    "Help"
+  ))
+  av$displayData <- displayData
+  av$responsible <- displayData$Responsible
+  
+}
+
+RefreshData()
+
+output$table1 <- DT::renderDataTable({
+    #update after submit is clicked
+    input$update
+    #update after delete is clicked
+    input$refresh
+    if(isAdmin()==0){
+      retval <- NULL
+    } else if(isAdmin()==1){
+      retval <- av$displayData
+    } else {
+      retval <- av$displayData[Responsible==isAdmin()]
+      if(nrow(retval)==0) retval <- NULL
+    }
+    retval
+  }, server = FALSE, selection = "single"
+  ) 
+DT::dataTableOutput("table1")
+
+#actionButton("update", "Update")
+#actionButton("refresh", "Refresh data")
+
+observeEvent(input$refresh, ({
+  RefreshData()
+}))
+
+observeEvent(input$update, ({
+  if(isAdmin()!=0){
+    newData <- av$selectedData
+    newData$status <- input$update_status
+    newData$responsible <- input$update_responsible
+    newData$hoursWorked <- input$update_hoursWorked
+    newData$projectDescription <- input$update_description
+    saveRDS(newData,file.path("data","responses",paste0(newData[["id"]],".RDS")))
+    RefreshData()
+  }
+}))
+
+observeEvent(input$table1_rows_selected, {
+    if (length(input$table1_rows_selected) > 0) {
+      if(isAdmin()==1){
+        index <- 1:length(av$responsible)
+      } else {
+        index <- which(av$responsible==isAdmin())
+      }
+      av$selectedData <- av$data[[index[input$table1_rows_selected]]]
+      shiny::updateSelectInput(session,"update_status",selected=av$selectedData$status)
+      shiny::updateSelectInput(session,"update_responsible",selected=av$selectedData$responsible)
+      shiny::updateSelectInput(session,"update_hoursWorked",selected=av$selectedData$hoursWorked)
+      shiny::updateTextAreaInput(session,"update_description",value=av$selectedData$projectDescription)
+    } else {
+      shiny::updateSelectInput(session,"update_status",selected="Unassigned")
+      shiny::updateSelectInput(session,"update_responsible",selected="Unassigned")
+      shiny::updateTextAreaInput(session,"update_description",value="")
+    }
+  })
+
+```
+
+### {data-width=10000 data-height=720}
+
+```{r}
+
+div(class="sidepadding",
+selectInput("update_status", "Status", choices = as.list(status), width = '300'),
+br(),
+selectInput("update_responsible", "Responsible", choices = as.list(responsible), width = '300'),
+br(),
+div(id="center-div",
+  textInput("update_hoursWorked", "Hours worked", value = "", width = '300', placeholder = NULL),
+  br(),
+  textAreaInput("update_description", "Description", value = "", width = 800, height=400, placeholder = NULL)
+)
+)
+
+```
+
+### {data-height=200}
+
+```{r}
+renderUI({
+  div(class="containerx",
+    div(class="blockx",actionButton("update", "Save Update")),
+    div(class="blockx",actionButton("refresh", "Refresh Table"))
+  )
+})
+```
+
+```{r}
+renderUI({
+  if (!isAdmin()) return(h2("Wrong password"))
+  h2("Correct password")
+  
+})
+```
+
+

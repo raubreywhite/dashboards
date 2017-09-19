@@ -1,0 +1,180 @@
+---
+title: "TB i Norge"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+    social: menu
+    smooth_scroll: true
+    theme: cosmo
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(ggvis)
+library(ggplot2)
+library(data.table)
+library(ggrepel)
+library(rmarkdown)
+library(scales)
+library(grid)
+library(directlabels)
+
+data <- readRDS(file = "/data_app/reporttb/data.RDS")
+
+fileSources = file.path("code",list.files("code",pattern="*.[rR]$"))
+sapply(fileSources,source,.GlobalEnv)
+
+originalWD <<- getwd()
+cat(originalWD, "\n", file=stderr())
+```
+
+Sidebar {.sidebar}
+=====================================================
+
+```{r}
+minYr <- min(data$cyear)+10
+maxYr <- max(data$cyear)
+if(minYr>maxYr-2) minYr <- min(data$cyear)
+sliderInput("reportYear","Rapport år",min=minYr,max=maxYr,value=max(data$cyear)-1,step=1,sep="")
+sliderInput("relSize","Figur størellse",min=-4,max=4,value=0,step=1)
+selectInput("displayType","Figur type",choices=list("Legend på bunnen"="a","Labeler i figurer"="b"))
+selectInput("displayLanguage","Språk",choices=list("Norsk bokmål"="NB","English"="EN"))
+
+downloadHandler(
+  filename <- function() {
+    "results.zip"
+  },
+  content <- function(fname){
+    
+    wd <- getwd()
+    on.exit(setwd(wd))
+    tmpdir <- tempdir()
+    
+    system(paste0("cp -r ",originalWD,"/* ",tmpdir))
+    system(paste0("mv ",tmpdir,"/report.Rmdx ",tmpdir,"/report.Rmd"))
+    
+    setwd(tmpdir)
+    
+    render("report.Rmd",output_format=word_document(), output_file="report.docx",
+           params=list(reportYear=input$reportYear))
+    fs <- c("report.docx")
+    
+    for(language in c("NB","EN")){
+      for(i in c(1:10)){
+        for(type in c("a","b")){
+          if(type=="b" & !(i %in% c(1,2,3,6,7,8,10))) next
+          path <- sprintf("%s_%s_RAPPORT_%d.png",language,type,i)
+          fs <- c(fs,path)
+          png(path, width=2480, height= 3508/2)
+          txt <- sprintf("print(Figure%d(data[cyear<=input$reportYear], relSize=2.2,type='%s',language='%s'))",i,type,language)
+          eval(parse(text=txt))
+          dev.off()
+          
+          path <- sprintf("%s_%s_FOREDRG_%d.png",language,type,i)
+          fs <- c(fs,path)
+          png(path, width=2480, height= 3508/2)
+          txt <- sprintf("print(Figure%d(data[cyear<=input$reportYear], relSize=2.8,moreSpace=TRUE,type='%s',language='%s'))",i,type,language)
+          eval(parse(text=txt))
+          dev.off()
+        }
+      }
+    }
+    
+    for(i in c(1:2)){
+      txt <- sprintf("print(x<-Table_x%d(data[cyear<=input$reportYear]))",i)
+      eval(parse(text=txt))
+      path <- attr(x,"filename")
+      fs <- c(fs,path)
+      openxlsx::write.xlsx(x,file=path)
+    }
+    print(fs)
+    zip(zipfile=fname, files=fs)
+  }
+)
+
+p(' ')
+p('Please only use the graphs displayed to the right for your own information!')
+p('If you want to use these figures for publication or presentations, please use the above "download" button.')
+p('This will give you the figures with proper sizes and resolutions for documents and powerpoint presentations!')
+
+```
+
+Figurene
+=====================================================
+
+
+Row {.tabset}
+------------------------------------------------------
+
+### Figur 1
+
+```{r}
+output$Figure1 <- renderPlot({Figure1(data[data$cyear<=input$reportYear,], relSize=1+0.2*input$relSize, type=input$displayType, language=input$displayLanguage)})
+plotOutput("Figure1")
+```
+
+### Figur 2
+
+```{r}
+output$Figure2 <- renderPlot({Figure2(data[data$cyear<=input$reportYear,], relSize=1+0.2*input$relSize, type=input$displayType, language=input$displayLanguage)})
+plotOutput("Figure2")
+```
+
+### Figur 3
+
+```{r}
+output$Figure3 <- renderPlot({Figure3(data[data$cyear<=input$reportYear,], relSize=1+0.2*input$relSize, type=input$displayType, language=input$displayLanguage)})
+plotOutput("Figure3")
+```
+
+### Figur 4
+
+```{r}
+output$Figure4 <- renderPlot({Figure4(data[data$cyear<=input$reportYear,], relSize=1+0.2*input$relSize, type=input$displayType, language=input$displayLanguage)})
+plotOutput("Figure4")
+```
+
+### Figur 5
+
+```{r}
+output$Figure5 <- renderPlot({Figure5(data[data$cyear<=input$reportYear,], relSize=1+0.2*input$relSize, type=input$displayType, language=input$displayLanguage)})
+plotOutput("Figure5")
+```
+
+### Figur 6
+
+```{r}
+output$Figure6 <- renderPlot({Figure6(data[data$cyear<=input$reportYear,], relSize=1+0.2*input$relSize, type=input$displayType, language=input$displayLanguage)})
+plotOutput("Figure6")
+```
+
+### Figur 7
+
+```{r}
+output$Figure7 <- renderPlot({Figure7(data[data$cyear<=input$reportYear,], relSize=1+0.2*input$relSize, type=input$displayType, language=input$displayLanguage)})
+plotOutput("Figure7")
+```
+
+### Figur 8
+
+```{r}
+output$Figure8 <- renderPlot({Figure8(data[data$cyear<=input$reportYear,], relSize=1+0.2*input$relSize, type=input$displayType, language=input$displayLanguage)})
+plotOutput("Figure8")
+```
+
+### Figur 9
+
+```{r}
+output$Figure9 <- renderPlot({Figure9(data[data$cyear<=input$reportYear,], relSize=1+0.2*input$relSize, type=input$displayType, language=input$displayLanguage)})
+plotOutput("Figure9")
+```
+
+### Figur 10
+
+```{r}
+output$Figure10 <- renderPlot({Figure10(data[data$cyear<=input$reportYear,], relSize=1+0.2*input$relSize, type=input$displayType, language=input$displayLanguage)})
+plotOutput("Figure10")
+```
+

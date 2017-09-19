@@ -1,0 +1,843 @@
+---
+title: "Sykdomspulsen"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    social: menu
+    smooth_scroll: true
+    theme: cosmo
+    navbar:
+      - { title: 'Trinngraf <input id="stepGraph" type="checkbox"/>', align: right }
+      - { title: 'Fargeblind <input id="colourBlind" type="checkbox"/>', align: right }
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(ggplot2)
+library(ggrepel)
+library(data.table)
+library(fhi)
+library(magrittr)
+
+autoInvalidate <- reactiveTimer(10000)
+
+observe({
+  autoInvalidate()
+  if(latestDataTime!=GetLatestDataTime()){
+    cat("hello",file="restart.txt")
+  }
+})
+
+GetLocationName <- function(location) {
+  locationName <- "Norge"
+  locationHTML <- "Norge"
+  
+  if (location != "Norge") {
+    norwayLocations <- readxl::read_excel(system.file("extdata", "norwayLocations.xlsx", package = "sykdomspuls"))
+    norwayLocations <- norwayLocations[is.na(norwayLocations$yearEnd),c("municip","municipName","county","countyName")]
+    if (sum(norwayLocations$municip == location) > 0) {
+      locationName <- as.character(norwayLocations$municipName[norwayLocations$municip == location])
+    } else if (sum(norwayLocations$county == location) > 0) {
+      locationName <- as.character(norwayLocations$countyName[norwayLocations$county == location])
+    }
+  }
+  
+  return(locationName)
+}
+
+
+GetCols <- reactive({
+  retval <- c('#fc8d59','#ffffbf','#91cf60')
+  if(!is.null(input$colourBlind)){
+    if(input$colourBlind){
+      retval <- c('#fc8d59','#ffffbf','#91bfdb')
+    } 
+  }
+  return(retval)
+})
+
+GetCols5 <- reactive({
+  retval <- c('#e41a1c','#377eb8','#4daf4a','#984ea3','#ff7f00')
+  if(!is.null(input$colourBlind)){
+    if(input$colourBlind){
+      retval <- c('#e41a1c','#377eb8','#4daf4a','#984ea3','#ff7f00')
+    } 
+  }
+  return(retval)
+})
+
+GetStepGraph <- reactive({
+  retval <- FALSE
+  if(!is.null(input$stepGraph)){
+    if(input$stepGraph){
+      retval <- TRUE
+    } 
+  }
+  return(retval)
+})
+
+output$latestDataTime <- renderText(format.Date(latestDataTime,"%d.%M.%Y"))
+
+```
+
+Nyheter {.storyboard}
+=========================================
+
+### Fra august 2016 er det en økning i antall konsultasjoner i aldersgruppen 15-19 år grunnet behov for sykemelding ved fravær i den videregående skole
+
+```{r, include=FALSE}
+pd <- resYearLine[type=="respiratory" & age=="15-19" & location=="Norge"]
+suppressWarnings(pd[, top := max(c(n, threshold4), na.rm = T) + 2])
+suppressWarnings(pd[, bottom := 0])
+
+output$storyboard1 <- renderPlot({
+  q <- MakeLineThresholdPlot(pd,x="displayDay",dataVal="n",L1="bottom",L2="threshold2",L3="threshold4",L4="top",allPoints = FALSE, title="Øvre-luftvei diagnose i 15-19 åringer i Norge", pointShift = -3.5, weekNumbers=TRUE, step=FALSE, GetCols=GetCols)
+  q <- q + geom_rect(data=pd[1,],aes(xmin=as.Date("2016-08-01"),xmax=as.Date("2090-08-01"),ymin=-Inf,ymax=Inf),fill="black",alpha=0.4)
+  q
+})
+```
+
+```{r}
+#plotOutput("storyboard1")
+```
+
+*** 
+
+Some commentary about Frame 1.
+
+### Lansering av Sykdomspulsen
+
+Velkommen til Sykdomspulsen!
+
+*** 
+
+Velkommen til Sykdomspulsen!
+
+Oversikt (ukentlig)
+===================================== 
+
+```{r, include=FALSE}
+
+
+weeklyBarometerPlotBrushData <- reactive({
+  retData <- resYearLine[resYearLine$type==input$weeklyBarometerType & 
+                           resYearLine$location==input$weeklyBarometerCounty &
+                           resYearLine$age==input$weeklyBarometerAge,]
+  return(retData)
+})
+
+output$weeklyBarometerPlotBrush <- renderPlot({
+  pd <- weeklyBarometerPlotBrushData() 
+  
+  if(is.null(pd)){
+    return(
+      data.frame(x=1:3,y=1:3) %>%
+        ggplot(aes(x=x,y=y)) + 
+        geom_point(alpha=0)
+    )
+  }
+  
+  MakeLineBrushPlot(pd,x="displayDay",dataVal="n",L2="threshold2",L3="threshold4", GetCols=GetCols)
+  
+})
+
+weeklyBarometerPlotData <- reactive({
+  
+  
+  if (is.null(input$weeklyBarometerCounty)) {
+    retData <- resYearLine[resYearLine$type==weeklyTypes[1] & resYearLine$age=="Totalt",]
+  } else if(input$weeklyBarometerCounty=="Norge"){
+    retData <- resYearLine[resYearLine$type==input$weeklyBarometerType & resYearLine$age==input$weeklyBarometerAge,]
+  } else {
+    retData <- resYearLineMunicip[resYearLineMunicip$type==input$weeklyBarometerType & 
+                                    resYearLineMunicip$age==input$weeklyBarometerAge &
+                                    resYearLineMunicip$county==input$weeklyBarometerCounty,]
+  }
+  if (nrow(retData) == 0) retData <- NULL
+  return(retData)
+})
+
+MakeBarometerPlot <- function(pd, title, GetCols){
+  locationNameOrder <- c("1 uke",rev(unique(pd$locationName))," 1 uke")
+  
+  skeleton <- data.table(expand.grid(seq(min(pd$displayDay)-6,max(pd$displayDay),by=1),locationNameOrder,stringsAsFactors = FALSE))
+  setnames(skeleton,c("displayDay","locationName"))
+  pd <- merge(skeleton,pd,by=c("locationName","displayDay"),all.x=TRUE)
+  pd[pd$locationName=="1 uke",]$status <- rep(c(rep("White",7),rep("Black",7)),sum(pd$locationName=="1 uke"))[1:sum(pd$locationName=="1 uke")]
+  pd[pd$locationName==" 1 uke",]$status <- rep(c(rep("White",7),rep("Black",7)),sum(pd$locationName==" 1 uke"))[1:sum(pd$locationName==" 1 uke")]
+  
+  pd$printWeek <- ""
+  pd$printWeekYear <- ""
+  pd[pd$locationName %in% c("1 uke"," 1 uke"),]$printWeek <- format.Date(pd[pd$locationName %in% c("1 uke"," 1 uke"),]$displayDay,"%V")
+  pd[pd$locationName %in% c("1 uke"," 1 uke"),]$printWeekYear <- format.Date(pd[pd$locationName %in% c("1 uke"," 1 uke"),]$displayDay,"%V/%G")
+  
+  setorder(pd,locationName,displayDay)
+  indexErase <- which(c(1:nrow(pd)%%7+1)!=4)
+  pd[indexErase,]$printWeek <- ""
+  pd[indexErase,]$printWeekYear <- ""
+  
+  pd$locationName <- factor(pd$locationName,levels=locationNameOrder)
+  setorder(pd,locationName,-displayDay)
+  varNames <- "status"
+  pd$status <- zoo::na.locf(pd$status)
+
+  includeNormal <- sum(pd$status=="Normal")>0
+  includeMedium <- sum(pd$status=="Medium")>0
+  includeHigh <- sum(pd$status=="High")>0
+  
+  colours <- NULL
+  if(includeHigh) colours <- c(colours,GetCols()[1])
+  if(includeMedium) colours <- c(colours,GetCols()[2])
+  
+  limits <- range(pd$displayDay)
+  limitsSize <- max(1,(limits[2] - limits[1])*0.005)
+  limits[1] <- limits[1] - limitsSize
+  limits[2] <- limits[2] + limitsSize
+  
+  q <- ggplot(pd,aes(x=displayDay,y=locationName))
+  q <- q + geom_tile(aes(fill = "L1"), alpha = 0.0)
+  q <- q + geom_tile(aes(fill = "L2"), alpha = 0.0)
+  q <- q + geom_tile(aes(fill = "L3"), alpha = 0.0)
+  if(includeHigh) q <- q + geom_tile(aes(fill = "L1"), alpha = 0.6, data=pd[pd$status=="High",])
+  if(includeMedium) q <- q + geom_tile(aes(fill = "L2"), alpha = 0.6, data=pd[pd$status=="Medium",])
+  if(includeNormal) q <- q + geom_tile(aes(fill = "L3"), alpha = 0.6, data=pd[pd$status=="Normal",])
+  q <- q + geom_tile(fill="black", alpha = 0.6, data=pd[pd$status=="Black",])
+  q <- q + geom_tile(fill="white", alpha = 0.6, data=pd[pd$status=="White",])
+  q <- q + ThemeShiny()
+  breaksDF <- pd[pd$locationName %in% c("1 uke") & pd$status %in% c("Black","White") & pd$printWeekYear!="",]
+  if(as.numeric(difftime(limits[2],limits[1],"days"))/7 < 52*0.5){
+    breaksDF <- breaksDF[seq(1,nrow(breaksDF),2),]
+  } else if(as.numeric(difftime(limits[2],limits[1],"days"))/7 < 52*1){
+    breaksDF <- breaksDF[seq(1,nrow(breaksDF),2),]
+  } else if(as.numeric(difftime(limits[2],limits[1],"days"))/7 < 52*2){
+    breaksDF <- breaksDF[seq(1,nrow(breaksDF),4),]
+  } else if(as.numeric(difftime(limits[2],limits[1],"days"))/7 < 52*4){
+    breaksDF <- breaksDF[seq(1,nrow(breaksDF),8),]
+  } else if(as.numeric(difftime(limits[2],limits[1],"days"))/7 < 52*10){
+    breaksDF <- breaksDF[seq(1,nrow(breaksDF),16),]
+  } else {
+    breaksDF <- breaksDF[seq(1,nrow(breaksDF),64),]
+  }
+  breaksDF$printLabel <- breaksDF$printWeekYear
+  q <- q + scale_x_date("", breaks = breaksDF$displayDay,  labels = breaksDF$printLabel)
+  q <- q + scale_y_discrete("")
+  q <- q + scale_fill_manual(values=GetCols(),labels=c(
+    "Betydelig høyere enn forventet",
+    "Høyere enn forventet",
+    "Forventet"))
+  q <- q + coord_cartesian(xlim=limits,expand = FALSE)
+  q <- q + labs(title=title)
+  q
+}
+
+output$weeklyBarometerPlot <- renderPlot({
+  pd <- weeklyBarometerPlotData() 
+  
+  if(is.null(pd)){
+    return(
+      data.frame(x=1:3,y=1:3) %>%
+        ggplot(aes(x=x,y=y)) + 
+        geom_point(alpha=0)
+    )
+  }
+  
+  if(!is.null(input$weeklyBarometerBrush)){
+    pd <- pd[pd$displayDay>=input$weeklyBarometerBrush$xmin & pd$displayDay<=input$weeklyBarometerBrush$xmax,]
+  }
+  
+  pd <- pd[,c("displayDay","locationName","status"),with=F]
+  t1 <- names(weeklyTypes)[weeklyTypes==input$weeklyBarometerType]
+  t2 <- GetLocationName(input$weeklyBarometerCounty)
+  title <- paste0(t1, " i ",t2, " (",input$weeklyBarometerAge," alder)\n")
+  
+  MakeBarometerPlot(pd, title=title, GetCols=GetCols)
+})
+ 
+  
+``` 
+
+Row {data-height=800 .tabset}
+-----------------------------------------------------------------------
+
+### Figur
+
+```{r}
+plotOutput("weeklyBarometerPlot")
+```  
+
+### Info
+
+Tabellen viser en oversikt over forekomsten av sykdom/symptom i et valgt tidsrom. 
+
+Valg av tidsrom gjøres på tidslinje nederst på siden. Valg av sykdom/symptom gjøres på venstre side. På venstre side kan man også velge Norge eller et fylke i Norge. Hvis man velger Norge vil hvert fylke få en rad i tabellen. Hvis man velger et fylke vil alle kommunene i valgte fylke få en rad i tabellen. 
+
+Dersom ruten for en gitt uke er farget med grønn farge betyr det at antall konsultasjoner i den gitte kommunen eller fylket er som forventet denne uken. En gul farge en gitt uke betyr at antall konsultasjoner i den gitte kommunen eller fylket er høyere enn forventet denne uken. En rød farge en gitt uke betyr at antall konsultasjoner i den gitte kommunen eller fylket er betydelig høyere enn forventet denne uken. Fargene er laget ut fra beregninger fra de foregående 5 årene i fylke eller kommunen.
+
+Se fanen *Om Sykdomspulsen* øverst for mer utfyllende informasjon om dataene og beregninger.
+              
+Det er mulig å bytte farger dersom man er fargeblind, se avkryssningsruten for *Fargeblind* øverst til høyre.
+
+
+Row {data-height=200}
+-----------------------------------------------------------------------
+
+### 
+
+```{r}
+plotOutput("weeklyBarometerPlotBrush", brush = brushOpts("weeklyBarometerBrush", direction="x", opacity=0.4))
+```  
+
+Instillinger {.sidebar}
+-----------------------------------------------------------------------
+
+```{r, echo = F}
+
+selectInput("weeklyBarometerType", "Sykdom/Symptom", as.list(weeklyTypes), selected = weeklyTypes[1])
+
+selectInput("weeklyBarometerAge", "Alder", as.list(weeklyAges), selected = "Totalt")
+
+selectInput("weeklyBarometerCounty", "Fylke", as.list(weeklyCounties), selected = weeklyCounties[1])
+
+```
+
+Signaler (ukentlig)
+===================================== 
+
+```{r, include=FALSE}
+weeklySignalData <- reactive({
+  #retData <- list(
+  #  df=outbreaks$df[type!="influensa" & wkyr==input$weeklyOutbreakWeek],
+  #  dk=outbreaks$dk[type!="influensa" & wkyr==input$weeklyOutbreakWeek]
+  #)
+  return(outbreaks$df[outbreaks$df$type!="influensa" & outbreaks$df$wkyr==input$weeklyOutbreakWeek,])
+})
+
+```
+
+Row {data-height=800 .tabset}
+-----------------------------------------------------------------------
+
+### Fylker
+
+```{r}
+#tableOutput("weeklySignalTableDF")
+renderTable({
+  data <- outbreaks$df[outbreaks$df$type!="influensa" & outbreaks$df$wkyr==input$weeklyOutbreakWeek,]
+  if(input$weeklyOutbreakHideEmpty){
+    data <- data[data$High!="",]
+  }
+  if(input$weeklyOutbreakSort=="zscore"){
+    setorder(data,-meanZScore)
+  } else if(input$weeklyOutbreakSort=="cases"){
+    setorder(data,-sumCum)
+  }
+  if(nrow(data)==0) return(data.frame("Obs"="Ingen utbrudd denne uken"))
+  data$wkyr <- NULL
+  data$sumCum[is.na(data$sumCum)] <- 0
+  data$sumCum <- formatC(data$sumCum,digits=0,format="f")
+  data$sumCum[data$sumCum=="0"] <- ""
+  setnames(data,c("Sykdom","Alder","Fylke (Z verdi)","Gj. Z Verdi","Eksess tilfeller"))
+  data$Sykdom <- factor(data$Sykdom,levels=weeklyTypes)
+  levels(data$Sykdom) <- names(weeklyTypes)
+  data
+},
+striped=TRUE)
+```  
+
+### Kommuner
+
+```{r}
+#tableOutput("weeklySignalTableDF")
+renderTable({
+  data <- outbreaks$dk[outbreaks$dk$type!="influensa" & outbreaks$dk$wkyr==input$weeklyOutbreakWeek,]
+  if(input$weeklyOutbreakHideEmpty){
+    data <- data[data$High!="",]
+  }
+  if(input$weeklyOutbreakSort=="zscore"){
+    setorder(data,-meanZScore)
+  } else if(input$weeklyOutbreakSort=="cases"){
+    setorder(data,-sumCum)
+  }
+  if(nrow(data)==0) return(data.frame("Obs"="Ingen utbrudd denne uken"))
+  data$wkyr <- NULL
+  data$sumCum[is.na(data$sumCum)] <- 0
+  data$sumCum <- formatC(data$sumCum,digits=0,format="f")
+  data$sumCum[data$sumCum=="0"] <- ""
+  setnames(data,c("Sykdom","Alder","Fylke","Kommune (Z verdi)","Gj. Z Verdi","Eksess tilfeller"))
+  data$Sykdom <- factor(data$Sykdom,levels=weeklyTypes)
+  levels(data$Sykdom) <- names(weeklyTypes)
+  data
+},
+striped=TRUE)
+```  
+
+### Info
+
+Tabellen viser en oversikt over forekomsten av sykdom/symptom i et valgt tidsrom. 
+
+Valg av tidsrom gjøres på bunnefiguren. Valg av sykdom/symptom gjøres på venstre side. På venstre side kan man også velge Norge eller et fylke i Norge. Hvis man velger Norge vil hvert fylke få en rad i tabellen. Hvis man velger et fylke vil alle kommunene få en rad i tabellen. 
+
+Dersom ruten for en gitt uke er farget med grønn farge betyr det at antall konsultasjoner i den gitte kommunen eller fylket er som forventet denne uken. En gul farge en gitt uke betyr at antall konsultasjoner i den gitte kommunen eller fylket er høyere enn forventet denne uken. En rød farge en gitt uke betyr at antall konsultasjoner i den gitte kommunen eller fylket er betydelig høyere enn forventet denne uken. Fargene er laget ut fra beregninger fra de foregående 5 årene.
+
+Se punktet *Om Sykdomspulsen* på venstre side for mer utfyllende informasjon om dataene og beregninger.
+              
+Det er mulig å bytte farger dersom du er fargeblind, se punktet *Fargeblind* på venstre side.
+
+Instillinger {.sidebar}
+-----------------------------------------------------------------------
+
+```{r, echo = F}
+
+selectInput("weeklyOutbreakWeek", "Uker", as.list(unique(outbreaks$dk$wkyr)), selected = unique(outbreaks$dk$wkyr)[1])
+
+selectInput("weeklyOutbreakSort", "Rangere etter", list("Z verdi"="zscore","Eksess tilfeller"="cases","Navn"="none"), selected = "zscore")
+
+checkboxInput("weeklyOutbreakHideEmpty", "Skjul tomme", TRUE)
+
+```
+
+Antall (ukentlig)
+===================================== 
+
+```{r, include=FALSE}
+
+
+  ## weekly
+  weeklyPlotData <- reactive({
+    if (is.null(input$weeklyCounty) | is.null(input$weeklyMunicip)) {
+      retData <- resYearLine[resYearLine$type==weeklyTypes[1] &
+                               resYearLine$location=="Norge" &
+                               resYearLine$age=="Totalt",]
+    } else if (input$weeklyMunicip %in% c("Norge", "Fylke")) {
+      retData <- resYearLine[resYearLine$type==input$weeklyType &
+                               resYearLine$location==input$weeklyCounty &
+                               resYearLine$age==input$weeklyAge,]
+    } else {
+      retData <- resYearLineMunicip[resYearLineMunicip$type==input$weeklyType &
+                               resYearLineMunicip$location==input$weeklyMunicip &
+                               resYearLineMunicip$age==input$weeklyAge,]
+      }
+    
+    if(!is.null(retData)){
+      retData$top <- max(c(retData$n, retData$threshold4), na.rm = T) + 2
+      retData$bottom <- 0
+    }
+
+    return(retData)
+  })
+
+output$weeklyNumberPlotBrush <- renderPlot({
+  pd <- weeklyPlotData() 
+  
+  if(is.null(pd)){
+    return(
+      data.frame(x=1:3,y=1:3) %>%
+        ggplot(aes(x=x,y=y)) + 
+        geom_point(alpha=0)
+    )
+  }
+  
+  MakeLineBrushPlot(pd,x="displayDay",dataVal="n",L2="threshold2",L3="threshold4", GetCols=GetCols)
+  
+})
+
+  output$weeklyNumberPlot <- renderPlot({
+    pd <- weeklyPlotData() 
+    if(is.null(pd) | is.null(input$weeklyMunicip)){
+      return(
+        data.frame(x=1:3,y=1:3) %>%
+          ggplot(aes(x=x,y=y)) + 
+          geom_point(alpha=0)
+      )
+    }
+    
+    if(!is.null(input$weeklyNumberBrush)){
+      pd <- pd[pd$displayDay>=input$weeklyNumberBrush$xmin & pd$displayDay<=input$weeklyNumberBrush$xmax,]
+    }
+    
+    t1 <- names(weeklyTypes)[weeklyTypes==input$weeklyType]
+    if(input$weeklyMunicip=="Fylke"){
+      t2 <- GetLocationName(input$weeklyCounty)
+    } else {
+      t2 <- GetLocationName(input$weeklyMunicip)
+    }
+    title <- paste0(t1, " i ",t2, " (",input$weeklyAge," alder)\n")
+    
+    if(input$weeklyValue=="consults"){
+      return(MakeLineThresholdPlot(pd,x="displayDay",dataVal="n",L1="bottom",L2="threshold2",L3="threshold4",L4="top",title=title, pointShift = -3.5, weekNumbers=TRUE, step=GetStepGraph(), GetCols=GetCols))
+    } else {
+      val <- stringr::str_extract(input$weeklyValue,"[0-9]$")
+      
+      MakeLineExcessPlot(pd,x="displayDay",dataVal=paste0("cumE",val),dataZ=paste0("cumZ",val),dataCIL=paste0("cumL",val), dataCIU=paste0("cumU",val),title=title, pointShift = -3.5, weekNumbers=TRUE, step=FALSE, GetCols=GetCols,allPoints = F)
+    }
+  })
+  
+  output$weeklyPlotTitle <- renderText({
+    if(is.null(input$weeklyType)){
+      return("")
+    }
+    
+    t1 <- names(weeklyTypes)[weeklyTypes==input$weeklyType]
+    if(input$weeklyMunicip=="Fylke"){
+      t2 <- GetLocationName(input$weeklyCounty)
+    } else {
+      t2 <- GetLocationName(input$weeklyMunicip)
+    }
+    paste0(t1, " i ",t2, " (",input$weeklyAge," alder)")
+  })
+
+  
+
+```
+
+Row {data-height=800 .tabset}
+-----------------------------------------------------------------------
+
+### Figur
+
+```{r}
+plotOutput("weeklyNumberPlot")
+```  
+
+### Info
+
+Grafen viser antall konsultasjoner per uke med en indikasjon om antallet er som forventet eller ikke. Valg av sykdom/symptom, sted og tidsrom gjøres på venstre side. Den svarte streken med rundingene viser antallet faktiske konsultasjoner. Bakgrunnsfargen er laget ut fra beregninger fra de foregående 5 årene i samme geografiske område. Når den svarte streken ligger i den grønne bakgrunnsfargen er antallet konsultasjoner som forventet og rundingen vises med svart. Når den svarte streken ligger i det gule feltet er antall konsultasjoner høyere enn forventet og fyllet i rundingen blir gult. Dersom den svarte streken ligger i det røde feltet er antall konsultasjoner betydelig høyere enn forventet og fyllet i rundingen blir rødt.
+
+Se fanen *Om Sykdomspulsen* øverst for mer utfyllende informasjon om dataene og beregninger.
+
+Det er mulig å bytte farger dersom du er fargeblind, se punktet *Fargeblind* på venstre side.
+
+Row {data-height=200}
+-----------------------------------------------------------------------
+
+### 
+
+```{r}
+plotOutput("weeklyNumberPlotBrush", brush = brushOpts("weeklyNumberBrush", direction="x", opacity=0.4))
+```  
+
+Instillinger {.sidebar}
+-----------------------------------------------------------------------
+
+```{r, echo = F}
+
+selectInput("weeklyType", "Sykdom/Symptom", as.list(weeklyTypes), selected = weeklyTypes[1])
+
+selectInput("weeklyAge", "Alder", as.list(weeklyAges), selected = "Totalt")
+
+selectInput("weeklyCounty", "Fylke", as.list(weeklyCounties), selected = weeklyCounties[1])
+
+weeklyMunicipChoices <- reactive({
+  if (is.null(input$weeklyCounty))
+    return(NULL)
+  if (input$weeklyCounty == "Norge") {
+    return("Norge")
+  } else {
+    x <- municipToCounty$location[municipToCounty$county == input$weeklyCounty]
+    names(x)  <- municipToCounty$locationName[municipToCounty$county == input$weeklyCounty]
+    return(c("Fylke", x))
+  }
+})
+
+renderUI({
+  selectInput("weeklyMunicip", "Kommune", as.list(weeklyMunicipChoices()), selected = weeklyMunicipChoices()[1])
+})
+
+selectInput("weeklyValue", "Verdier", as.list(weeklyValues), selected = weeklyValues[1])
+
+```
+
+Antall (daglige)
+===================================== 
+
+```{r, include=FALSE}
+
+dailyPlotBrushData <- reactive({
+  retData <- resYearLine[resYearLine$type==input$dailyType &
+                               resYearLine$location==input$dailyCounty &
+                               resYearLine$age==input$dailyAge,]
+  if(!is.null(retData)) retData <- retData[retData$displayDay >= dateMinRestrictedRecent,]
+
+  return(retData)
+})
+
+output$dailyPlotBrush <- renderPlot({
+  pd <- dailyPlotBrushData() 
+  
+  if(is.null(pd)){
+    return(
+      data.frame(x=1:3,y=1:3) %>%
+        ggplot(aes(x=x,y=y)) + 
+        geom_point(alpha=0)
+    )
+  }
+  
+  MakeLineBrushPlot(pd,x="displayDay",dataVal="n",L2="threshold2",L3="threshold4", GetCols=GetCols)
+  
+})
+
+  dailyPlotData <- reactive({
+    retData <- resRecentLine[resRecentLine$type==input$dailyType &
+                               resRecentLine$location==input$dailyCounty &
+                               resRecentLine$age==input$dailyAge,]
+    if(!is.na(retData)){
+      retData$top <- max(c(retData$n, retData$threshold4), na.rm = T) + 2
+      retData$bottom <- 0
+    }
+    return(retData)
+  })
+
+output$dailyNumberPlot <- renderPlot({
+    pd <- dailyPlotData() 
+    if(is.null(pd)){
+      return(
+        data.frame(x=1:3,y=1:3) %>%
+          ggplot(aes(x=x,y=y)) + 
+          geom_point(alpha=0)
+      )
+    }
+    
+    if(!is.null(input$dailyBrush)){
+      pd <- pd[pd$date>=input$dailyBrush$xmin-6 & pd$date<=input$dailyBrush$xmax,]
+    }
+    
+    t1 <- names(dailyTypes)[dailyTypes==input$dailyType]
+    t2 <- GetLocationName(input$dailyCounty)
+    
+    title <- paste0(t1, " i ",t2, " (",input$dailyAge," alder)\n")
+    
+    MakeLineThresholdPlot(pd,x="date",dataVal="n",L1="bottom",L2="threshold2",L3="threshold4",L4="top",allPoints=FALSE,title=title,xShift=0.5, step=GetStepGraph(), GetCols=GetCols)
+  })
+  
+  output$dailyPlotTitle <- renderText({
+    if(is.null(input$dailyType)){
+      return("")
+    }
+    
+    t1 <- names(dailyTypes)[dailyTypes==input$dailyType]
+    t2 <- GetLocationName(input$dailyCounty)
+    
+    paste0(t1, " i ",t2, " (",input$dailyAge," alder)")
+  })
+
+
+  
+
+```
+
+Row {data-height=800 .tabset}
+-----------------------------------------------------------------------
+
+### Figur
+
+```{r}
+plotOutput("dailyNumberPlot")
+```  
+
+### Info
+
+Grafen viser antall konsultasjoner per dag med en indikasjon om antallet er som forventet eller ikke. Valg av sykdom/symptom, sted og tidsrom gjøres på høyre side. Den svarte streken med rundingene viser antallet faktiske konsultasjoner. Bakgrunnsfargen er laget ut fra beregninger fra de foregående 5 årene. Når den svarte streken ligger i den grønne bakgrunnsfargen er antallet konsultasjoner som forventet og rundingen vises med svart. Når den svarte streken ligger i det gule feltet er antall konsultasjoner høyere enn forventet og fyllet i rundingen blir gult. Dersom den svarte streken ligger i det røde feltet er antall konsultasjoner betydelig høyere enn forventet og fyllet i rundingen blir rødt.
+
+Se fanen *Om Sykdomspulsen* øverst for mer utfyllende informasjon om dataene og beregninger.
+              
+Det er mulig å bytte farger dersom man er fargeblind, se avkryssningsruten for *Fargeblind* øverst til høyre.
+
+Row {data-height=200}
+-----------------------------------------------------------------------
+
+### 
+
+```{r}
+plotOutput("dailyPlotBrush", brush = brushOpts("dailyBrush", direction="x", opacity=0.4))
+```  
+
+Instillinger {.sidebar}
+-----------------------------------------------------------------------
+
+```{r, echo = F}
+
+selectInput("dailyType", "Sykdom/Symptom", as.list(dailyTypes), selected = dailyTypes[1])
+
+selectInput("dailyAge", "Alder", as.list(dailyAges), selected = "Totalt")
+
+selectInput("dailyCounty", "Fylke", as.list(dailyCounties), selected = dailyCounties[1])
+
+```
+
+
+Sammenligninger (ukentlig)
+===================================== 
+
+```{r, include=FALSE}
+weeklyComparisonPlotBrushData <- reactive({
+  retData <- resYearLine[resYearLine$type==input$weeklyComparisonType &
+                 resYearLine$location==input$weeklyComparisonCounty &
+                 resYearLine$age==input$weeklyComparisonAge,]
+  
+  return(retData)
+})
+
+output$weeklyComparisonPlotBrush <- renderPlot({
+  pd <- weeklyComparisonPlotBrushData() 
+  
+  if(is.null(pd)){
+    return(
+      data.frame(x=1:3,y=1:3) %>%
+        ggplot(aes(x=x,y=y)) + 
+        geom_point(alpha=0)
+    )
+  }
+  
+  MakeLineBrushPlot(pd,x="displayDay",dataVal="n",L2="threshold2",L3="threshold4", GetCols=GetCols)
+  
+})
+  
+  weeklyComparisonPlotData <- reactive({
+    
+    if (is.null(input$weeklyComparisonCounty)) {
+      retData <- resYearLine[resYearLine$type==weeklyTypes[1] & 
+                                resYearLine$age=="Totalt",]
+      
+    } else if(sum(input$weeklyComparisonCounty %in% "Norge")){
+      retData <- resYearLine[resYearLine$type==input$weeklyComparisonType & 
+                                  resYearLine$age==input$weeklyComparisonAge,]
+    } else {
+      retData <- resYearLineMunicip[resYearLineMunicip$type==input$weeklyComparisonType & 
+                                         resYearLineMunicip$age==input$weeklyComparisonAge &
+                                         resYearLineMunicip$county==input$weeklyComparisonCounty,]
+    }
+    
+    if (nrow(retData) == 0){
+      retData <- NULL
+    } else {
+      retData$n <- retData$n/retData$pop*10000
+    }
+    return(retData)
+    
+  })
+
+output$weeklyComparisonPlot <- renderPlot({
+  
+  pd <- weeklyComparisonPlotData() 
+  
+  if(is.null(pd)){
+    return(
+      data.frame(x=1:3,y=1:3) %>%
+        ggplot(aes(x=x,y=y)) + 
+        geom_point(alpha=0)
+    )
+  }
+  
+  if(!is.null(input$weeklyComparisonBrush)){
+    pd <- pd[pd$displayDay>=input$weeklyComparisonBrush$xmin & pd$displayDay<=input$weeklyComparisonBrush$xmax,]
+  }
+  
+  if(!is.null(input$weeklyComparisonMunicip)){
+    interestingPlaces <- input$weeklyComparisonMunicip
+    if(length(interestingPlaces)>5) interestingPlaces <- interestingPlaces[1:5]
+  } else interestingPlaces <- "Norge"
+  
+  pd$highlightCondition <- FALSE
+  pd$highlightCondition[pd$location %in% interestingPlaces] <- TRUE
+  
+  t1 <- names(weeklyTypes)[weeklyTypes==input$weeklyComparisonType]
+  t2 <- GetLocationName(input$weeklyComparisonCounty)
+    
+  title <- paste0(t1, " i ",t2, " (",input$weeklyComparisonAge," alder)\n")
+  
+  MakeLineComparisonPlot(pd,x="displayDay",dataVal="n",comparisonNames="location",highlightCondition="highlightCondition",namesFunction=function(x)GetLocationName(x), title=title, GetCols=GetCols)
+})
+  
+  output$weeklyComparisonTitle <- renderText({
+    if(is.null(input$weeklyComparisonType)){
+      return("")
+    }
+    
+    t1 <- names(weeklyTypes)[weeklyTypes==input$weeklyComparisonType]
+    t2 <- GetLocationName(input$weeklyComparisonCounty)
+    
+    paste0(t1, " i ",t2, " (",input$weeklyComparisonAge," alder)")
+  })
+
+```
+
+Row {data-height=800 .tabset}
+-----------------------------------------------------------------------
+
+### Figur
+
+```{r}
+plotOutput("weeklyComparisonPlot")
+```  
+
+### Info
+
+Denne grafen viser antall konsultasjoner per 10 000 innbyggere med valgt sykdom/symptom, sted og tid. Valg av sykdom/symptom, sted og tidsrom gjøres på venstre side. Ved å velge flere fylker eller kommuner er det mulig å sammenlikne dem.
+
+Se fanen *Om Sykdomspulsen* øverst for mer utfyllende informasjon om dataene og beregninger.
+              
+Det er mulig å bytte farger dersom man er fargeblind, se avkryssningsruten for *Fargeblind* øverst til høyre.
+                            
+
+Row {data-height=200}
+-----------------------------------------------------------------------
+
+### 
+
+```{r}
+plotOutput("weeklyComparisonPlotBrush", brush = brushOpts("weeklyComparisonBrush", direction="x", opacity=0.4))
+```  
+
+Instillinger {.sidebar}
+-----------------------------------------------------------------------
+
+```{r, echo = F}
+
+selectInput("weeklyComparisonType", "Sykdom/Symptom", as.list(weeklyTypes), selected = weeklyTypes[1])
+
+selectInput("weeklyComparisonAge", "Alder", as.list(weeklyAges), selected = "Totalt")
+
+selectInput("weeklyComparisonCounty", "Fylke", as.list(weeklyCounties), selected = weeklyCounties[1])
+
+  weeklyComparisonMunicipChoices <- reactive({
+    if (is.null(input$weeklyComparisonCounty))
+      return(NULL)
+    if (input$weeklyComparisonCounty == "Norge") {
+      x <- weeklyCounties
+      return(x)
+    } else {
+      x <- municipToCounty[county == input$weeklyComparisonCounty]$location
+      names(x)  <- municipToCounty[county == input$weeklyComparisonCounty]$locationName
+      return(x)
+    }
+  })
+  
+renderUI({
+    checkboxGroupInput("weeklyComparisonMunicip", "Sammenlign", as.list(weeklyComparisonMunicipChoices()), selected = weeklyComparisonMunicipChoices()[1])
+  })
+  
+```
+
+
+Om Sykdomspulsen
+===================================== 
+
+Row 
+-----------------------------------------------------------------------
+
+### 
+
+Sykdomspulsen er et overvåkningssystem basert på diagnosekoder (ICPC-2 koder) satt på legekontorer og legevakter i hele Norge. Formålet med Sykdomspulsen er å se trender og udbredelse av smittsomme sykdommer slik at utbrudd oppdages så tidlig som mulig. I tillegg kan overvåkningen brukes til å iverksette folkehelsetiltak og se effekt av tiltak.
+
+Diagnosekoder som registreres hos lege eller legevakt sendes til Helsedirektoratet som en del av legenes refusjonskrav (KUHR-systemet*). Folkehelseinstituttet mottar daglig oppdatert KUHR-data til Sykdomspulsen. Dataene er anonyme uten pasientidentifikasjon, men med informasjon om kjønn, aldersgruppe, konsultasjonsdato og sted for konsultasjon. Dataene blir bearbeidet og quasiposson regresjon blir brukt for å detektere forhøyet forekomst av et spesifikt syndrom. Dette er basert på de foregående 5 årene i det samme geografiske området. På denne måten kan antall faktiske konsultasjoner bli identifisert som forventet, høyere enn forventet eller mye høyere enn forventet. Selv om dataene noen ganger viser seg å ligge i området høyere enn forventet eller mye høyere enn forventet trenger dette ikke å være noen grunn til bekymring. Resultatene blir undersøkt av leger og epidemiologer på Folkehelseinstituttet og i kommunene.
+
+Dersom du ønsker mer informasjon om Sykdosmspulsen kan du kontakte Gry M Grøneng eller Richard White på mailadressene: GryMarysol.Groneng@fhi.no og Richard.White@fhi.no.
+
+Det er mulig å bytte farger dersom man er fargeblind, se avkryssningsruten for *Fargeblind* øverst til høyre.
+
+
+*KUHR-systemet: Regninger for all behandling som utføres utenfor sykehus sendes til HELFO for utbetaling og kontroll (legenes refusjonskrav).
+
+
+
