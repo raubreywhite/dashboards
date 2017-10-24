@@ -3,8 +3,6 @@ COMPUTER_NAME <- readLines(con,n=1)
 close(con)
 Sys.setenv(COMPUTER=COMPUTER_NAME)
 
-list.files("/data_raw/normomo/")
-
 cat("##teamcity[testStarted name='Normomo.RunAll']\n")
 cat("##teamcity[testStdOut name='Normomo.RunAll' out='We hope this runs correctly']\n")
 
