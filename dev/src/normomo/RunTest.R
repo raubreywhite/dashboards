@@ -25,6 +25,7 @@ if(output$status==0){
 } else {
   a$add_result("normomo","RunAll",testthat::expectation("error","Fail"))
 }
+a$add_result("normomo","Test",testthat::expectation("error","Test fail"))
 a$end_context("normomo")
 a$end_reporter()
 close(a$out)
