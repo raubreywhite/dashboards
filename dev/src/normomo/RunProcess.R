@@ -167,6 +167,9 @@ tryCatch({
     cat(sprintf("%s/%s/R/NORMOMO Saving data_processed.xlsx",Sys.time(),Sys.getenv("COMPUTER")),"\n")
     openxlsx::write.xlsx(allResults,DashboardFolder("results",file.path(RAWmisc::YearWeek(dateDataMinusOneWeek),"Data","data_processed.xlsx")))
 
+    ## Grid graph
+    RunStatusTiles(allResults=allResults,folder=fhi::DashboardFolder("results",file.path(RAWmisc::YearWeek(dateDataMinusOneWeek),"Graphs")), yearWeek=RAWmisc::YearWeek(dateDataMinusOneWeek), dateData=dateData)
+    
     ## extracting out raw data for later work
     masterData[,ageCat:=cut(age,c(0,4,14,64,200),include.lowest = TRUE)]
     masterData[,deathWeek:=momo:::isoweek(masterData$DoD, type="week")]
@@ -204,7 +207,7 @@ tryCatch({
     
     cat(sprintf("%s/%s/R/NORMOMO Saving data_raw.xlsx",Sys.time(),Sys.getenv("COMPUTER")),"\n")
     openxlsx::write.xlsx(temp,DashboardFolder("results",file.path(RAWmisc::YearWeek(dateDataMinusOneWeek),"Data","data_raw.xlsx"))) 
-
+  
     cat(sprintf("%s/%s/R/NORMOMO Zipping results",Sys.time(),Sys.getenv("COMPUTER")),"\n")
     ZipResults(
       folderResults=fhi::DashboardFolder("results"),
