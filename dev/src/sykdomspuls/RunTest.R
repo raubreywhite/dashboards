@@ -12,6 +12,8 @@ for(baseFolder in c("/data_clean","/results","/data_app")){
 }
 
 unlink(file.path("/junit","sykdomspuls.xml"))
+Sys.sleep(1)
+
 a <- testthat:::JunitReporter$new()
 a$start_reporter()
 a$out <- file(file.path("/junit","sykdomspuls.xml"), "w+")

@@ -11,6 +11,8 @@ for(baseFolder in c("/data_clean","/results","/data_app")){
 }
 
 unlink(file.path("/junit","normomo.xml"))
+Sys.sleep(1)
+
 a <- testthat:::JunitReporter$new()
 a$start_reporter()
 a$out <- file(file.path("/junit","normomo.xml"), "w+")
