@@ -211,9 +211,9 @@ if(!UpdateData()){
     SaveData(res, DashboardFolder("results",sprintf("%s.RDS",name)))
     SaveData(res, DashboardFolder("data_app",sprintf("%s.RDS",name)))
     
-    # Save last 4 weeks of results
+    # Save last 8 weeks of results
     if(i %in% c(3,4)){
-      saveWkYrs <- rev(sort(unique(res$wkyr)))[1:4]
+      saveWkYrs <- rev(sort(unique(res$wkyr)))[1:8]
       res <- res[wkyr %in% saveWkYrs]
       SaveData(res, DashboardFolder("results",
                                     sprintf("archive_%s_%s.RDS",LatestDatasets()$date,name)))
