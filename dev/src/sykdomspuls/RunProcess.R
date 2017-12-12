@@ -125,7 +125,7 @@ if(!UpdateData()){
       granularity=c("Weekly"),
       stringsAsFactors = FALSE))
     analysesMunicips[,v:=sykdomspuls::CONFIG$VERSION]
-    analysesMunicips <- analysesMunicips[location=="municip0301"]
+    #analysesMunicips <- analysesMunicips[location=="municip0301"]
   
     # control stack for comparison of models
     analysesComparison <- vector("list",length(sykdomspuls::CONFIG$VERSIONS))

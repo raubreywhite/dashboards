@@ -28,28 +28,28 @@ cat("stderr")
 cat(output$stderr)
 
 if(output$status==0){
-  cat("PASS 1")
+  cat("\n**PASS 1**\n")
   a$add_result("sykdomspuls","RunAll",testthat::expectation("success","Pass"))
 } else {
-  cat("FAIL 1")
+  cat("\n**FAIL 1**\n")
   a$add_result("sykdomspuls","RunAll",testthat::expectation("error","Fail"))
 }
 
 ## Run API
 process <- processx::process$new("Rscript","/src/sykdomspuls/RunAPI.R")
 if(process$is_alive()){
-  cat("PASS 2")
+  cat("\n**PASS 2**\n")
   a$add_result("sykdomspuls","API_0min",testthat::expectation("success","Pass"))
 } else {
-  cat("FAIL 2")
+  cat("\n**FAIL 2**\n")
   a$add_result("sykdomspuls","API_0min",testthat::expectation("error","Fail"))
 }
 Sys.sleep(120)
 if(process$is_alive()){
-  cat("PASS 3")
+  cat("\n**PASS 3**\n")
   a$add_result("sykdomspuls","API_2min",testthat::expectation("success","Pass"))
 } else {
-  cat("FAIL 3")
+  cat("\n**FAIL 3**\n")
   a$add_result("sykdomspuls","API_2min",testthat::expectation("error","Fail"))
 }
 
@@ -58,10 +58,10 @@ json <- httr::content(req, as = "text", encoding="UTF-8")
 res <- jsonlite::fromJSON(json)
 
 if(res=="0"){
-  cat("PASS 4")
+  cat("\n**PASS 4**\n")
   a$add_result("sykdomspuls","API_received_0",testthat::expectation("success","Pass"))
 } else {
-  cat("FAIL 4")
+  cat("\n**FAIL 4**\n")
   a$add_result("sykdomspuls","API_received_0",testthat::expectation("error","Fail"))
 }
 
