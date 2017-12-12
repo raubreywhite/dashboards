@@ -130,12 +130,12 @@ dStack <- unique(d[,c("type","location","age"),with=F])
 dkStack <- unique(dk[,c("type","location","age","county"),with=F])
 
 types <- c(
-  "Øvre-luftvei diagnose" = "respiratory",
+  "Øvre-luftvei diagnose" = "respiratoryexternal",
   "Mage-tarm diagnose" = "gastro")
 
 outbreaks <- readRDS(file.path(DATA,"outbreaks.RDS"))
 for(i in c("df","dk")){
-  outbreaks[[i]] <- outbreaks[[i]][type!="influensa" & !is.na(sumCum)]
+  outbreaks[[i]] <- outbreaks[[i]][type %in% types & !is.na(sumCum)]
   outbreaks[[i]][,numeric:=as.numeric(meanZScore)]
   setorder(outbreaks[[i]],-wkyr,-numeric)
   outbreaks[[i]][,numeric:=NULL]
