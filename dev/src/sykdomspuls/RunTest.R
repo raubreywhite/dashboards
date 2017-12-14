@@ -4,14 +4,13 @@ close(con)
 Sys.setenv(COMPUTER=COMPUTER_NAME)
 
 # Cleaning up previous runs data
-if(FALSE){
 for(baseFolder in c("/data_clean","/results","/data_app")){
   files <- list.files(file.path(baseFolder,"sykdomspuls"))
   if(length(files)>0){
     for(f in files) unlink(file.path(baseFolder,"sykdomspuls",f))
   }
 }
-}
+
 unlink(file.path("/junit","sykdomspuls.xml"))
 Sys.sleep(1)
 
@@ -21,7 +20,7 @@ a$out <- file(file.path("/junit","sykdomspuls.xml"), "w+")
 a$start_context("sykdomspuls")
 
 # Run process
-if(FALSE){
+
 output <- processx::run("Rscript","/src/sykdomspuls/RunProcess.R", error_on_status=F, echo=T)
 cat("\n\nstdout\n\n")
 cat(output$stdout)
@@ -35,7 +34,7 @@ if(output$status==0){
   cat("\n**FAIL 1**\n")
   a$add_result("sykdomspuls","RunAll",testthat::expectation("error","Fail"))
 }
-}
+
 ## Run API
 process <- processx::process$new("Rscript","/src/sykdomspuls/RunAPI.R")
 if(process$is_alive()){
@@ -45,13 +44,13 @@ if(process$is_alive()){
   cat("\n**FAIL 2**\n")
   a$add_result("sykdomspuls","API_0min",testthat::expectation("error","Fail"))
 }
-Sys.sleep(120)
+Sys.sleep(240)
 if(process$is_alive()){
   cat("\n**PASS 3**\n")
-  a$add_result("sykdomspuls","API_2min",testthat::expectation("success","Pass"))
+  a$add_result("sykdomspuls","API_4min",testthat::expectation("success","Pass"))
 } else {
   cat("\n**FAIL 3**\n")
-  a$add_result("sykdomspuls","API_2min",testthat::expectation("error","Fail"))
+  a$add_result("sykdomspuls","API_4min",testthat::expectation("error","Fail"))
 }
 
 req <- httr::GET("http://localhost:8000/test?x=0")
