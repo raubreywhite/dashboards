@@ -51,6 +51,7 @@ StackIterator <- function(stack, data, progressFunction) {
 #it <- StackIterator(data,stack)
 #nextElem(it)
 
+flush.console()
 
 if(!UpdateData()){
   cat(sprintf("%s/%s/R/SYKDOMSPULS Have not run analyses and exiting",Sys.time(),Sys.getenv("COMPUTER")),"\n")
@@ -62,6 +63,8 @@ if(!UpdateData()){
   
   for(SYNDROME in sykdomspuls::CONFIG$SYNDROMES){
     cat(sprintf("\n\n%s/%s/R/SYKDOMSPULS ***%s***\n\n",Sys.time(),Sys.getenv("COMPUTER"),SYNDROME))
+    flush.console()
+    
     if(SYNDROME %in% sykdomspuls::CONFIG$SYNDROMES_DOCTOR){
       data <- readRDS(file = DashboardFolder("data_clean",LatestDatasets()$legekontakt_everyone))  
     } else {
