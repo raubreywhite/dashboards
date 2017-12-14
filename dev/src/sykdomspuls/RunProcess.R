@@ -66,9 +66,9 @@ if(!UpdateData()){
     flush.console()
     
     if(SYNDROME %in% sykdomspuls::CONFIG$SYNDROMES_DOCTOR){
-      data <- readRDS(file = DashboardFolder("data_clean",LatestDatasets()$legekontakt_everyone))  
+      data <- readRDS(file = DashboardFolder("data_clean",sykdomspuls::LATEST_DATA$legekontakt_everyone))  
     } else {
-      data <- readRDS(file = DashboardFolder("data_clean",LatestDatasets()$everyone_everyone)) 
+      data <- readRDS(file = DashboardFolder("data_clean",sykdomspuls::LATEST_DATA$everyone_everyone)) 
     }
     
     namesDoctor <- names(data)
@@ -226,14 +226,8 @@ if(!UpdateData()){
       saveWkYrs <- rev(sort(unique(res$wkyr)))[1:8]
       res <- res[wkyr %in% saveWkYrs]
       SaveData(res, DashboardFolder("results",
-                                    sprintf("archive_%s_%s.RDS",LatestDatasets()$date,dataFiles[i])))
+                                    sprintf("archive_%s_%s.RDS",sykdomspuls::LATEST_DATA$date,dataFiles[i])))
     }
-  }
-  
-  # time to delete latest done file
-  # this really needs to be fixed
-  if(Sys.getenv("COMPUTER") %in% c("smhb","test")){
-    DeleteLatestDoneFile()
   }
 
   ## GENERATE LIST OF OUTBREAKS
