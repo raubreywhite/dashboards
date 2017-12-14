@@ -66,9 +66,9 @@ if(!UpdateData()){
     flush.console()
     
     if(SYNDROME %in% sykdomspuls::CONFIG$SYNDROMES_DOCTOR){
-      data <- readRDS(file = DashboardFolder("data_clean",sykdomspuls::LATEST_DATA$legekontakt_everyone))  
+      data <- readRDS(file = DashboardFolder("data_clean",LatestDatasets()$legekontakt_everyone))  
     } else {
-      data <- readRDS(file = DashboardFolder("data_clean",sykdomspuls::LATEST_DATA$everyone_everyone)) 
+      data <- readRDS(file = DashboardFolder("data_clean",LatestDatasets()$everyone_everyone)) 
     }
     
     namesDoctor <- names(data)
@@ -109,6 +109,10 @@ if(!UpdateData()){
     setcolorder(dataNorway,c("variable","date","HelligdagIndikator","location","age","pop","consultWithInfluensa","consultWithoutInfluensa","value"))
   
     data <- rbindlist(list(dataNorway,dataCounties,data))
+    
+    cat(sprintf("\n\n%s/%s/R/SYKDOMSPULS Setting keys for binary search - VERY IMPORTANT 3x SPEEDUP\n\n",Sys.time(),Sys.getenv("COMPUTER")),"\n")
+    setkeyv(data,c("variable","location","age"))
+    
   
     # setting control stack for counties
     analysesCounties <- data.table(expand.grid(
@@ -156,10 +160,6 @@ if(!UpdateData()){
       assign("opts", opts, envir = .GlobalEnv)
     }
   
-    cat(sprintf("\n\n%s/%s/R/SYKDOMSPULS Setting keys for binary search - VERY IMPORTANT 3x SPEEDUP\n\n",Sys.time(),Sys.getenv("COMPUTER")),"\n")
-    setkeyv(data,c("variable","location","age"))
-  
-    cat(sprintf("\n\n%s/%s/R/SYKDOMSPULS Beginning analyses\n\n",Sys.time(),Sys.getenv("COMPUTER")))
     for(i in c(1:4)){
       if(i==1){
         stack <- analysesComparison
@@ -226,7 +226,7 @@ if(!UpdateData()){
       saveWkYrs <- rev(sort(unique(res$wkyr)))[1:8]
       res <- res[wkyr %in% saveWkYrs]
       SaveData(res, DashboardFolder("results",
-                                    sprintf("archive_%s_%s.RDS",sykdomspuls::LATEST_DATA$date,dataFiles[i])))
+                                    sprintf("archive_%s_%s.RDS",LatestDatasets()$date,dataFiles[i])))
     }
   }
 
