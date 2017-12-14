@@ -18,10 +18,10 @@ a$start_reporter()
 a$out <- file(file.path("/junit","normomo.xml"), "w+")
 a$start_context("normomo")
 
-output <- processx::run("Rscript","/src/normomo/RunProcess.R", error_on_status=F)
-cat("stdout")
+output <- processx::run("Rscript","/src/normomo/RunProcess.R", error_on_status=F, echo=T)
+cat("\n\nstdout\n\n")
 cat(output$stdout)
-cat("stderr")
+cat("\n\nstderr\n\n")
 cat(output$stderr)
 
 if(output$status==0){

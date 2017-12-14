@@ -218,8 +218,8 @@ if(!UpdateData()){
       data[[s]] <- readRDS(DashboardFolder("results",sprintf("%s_%s.RDS",dataFiles[i],sykdomspuls::CONFIG$SYNDROMES[s])))
     }
     data <- rbindlist(data)
-    SaveData(res, DashboardFolder("results",sprintf("%s.RDS",dataFiles[i])))
-    SaveData(res, DashboardFolder("data_app",sprintf("%s.RDS",dataFiles[i])))
+    SaveData(data, DashboardFolder("results",sprintf("%s.RDS",dataFiles[i])))
+    SaveData(data, DashboardFolder("data_app",sprintf("%s.RDS",dataFiles[i])))
     
     # Save last 8 weeks of results
     if(i %in% c(3,4)){

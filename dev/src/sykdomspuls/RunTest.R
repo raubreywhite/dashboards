@@ -21,10 +21,10 @@ a$start_context("sykdomspuls")
 
 # Run process
 
-output <- processx::run("Rscript","/src/sykdomspuls/RunProcess.R", error_on_status=F)
-cat("stdout")
+output <- processx::run("Rscript","/src/sykdomspuls/RunProcess.R", error_on_status=F, echo=T)
+cat("\n\nstdout\n\n")
 cat(output$stdout)
-cat("stderr")
+cat("\n\nstderr\n\n")
 cat(output$stderr)
 
 if(output$status==0){
