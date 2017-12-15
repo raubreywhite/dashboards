@@ -44,13 +44,13 @@ if(process$is_alive()){
   cat("\n**FAIL 2**\n")
   a$add_result("sykdomspuls","API_0min",testthat::expectation("error","Fail"))
 }
-Sys.sleep(240)
+Sys.sleep(60*6)
 if(process$is_alive()){
   cat("\n**PASS 3**\n")
-  a$add_result("sykdomspuls","API_4min",testthat::expectation("success","Pass"))
+  a$add_result("sykdomspuls","API_6min",testthat::expectation("success","Pass"))
 } else {
   cat("\n**FAIL 3**\n")
-  a$add_result("sykdomspuls","API_4min",testthat::expectation("error","Fail"))
+  a$add_result("sykdomspuls","API_6min",testthat::expectation("error","Fail"))
 }
 
 req <- httr::GET("http://localhost:8000/test?x=0")
