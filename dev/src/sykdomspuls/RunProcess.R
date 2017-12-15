@@ -39,7 +39,7 @@ StackIterator <- function(stack, data, progressFunction) {
   nextEl <- function() {
     i <- nextElem(it)
     progressFunction(i)
-    list("stack"=stack[i],"data"=data[.(stack$type[i],stack$location[i],stack$age[i])])
+    list("stack"=stack[i],"data"=data[.(stack$location[i],stack$age[i])])
     #list("stack"=stack[i],"data"=data[variable==stack$type[i] & location==stack$location[i] & age==stack$age[i]])
   }
 
@@ -57,63 +57,50 @@ if(!UpdateData()){
   cat(sprintf("%s/%s/R/SYKDOMSPULS Have not run analyses and exiting",Sys.time(),Sys.getenv("COMPUTER")),"\n")
   q(save="no", status=21)
 } else {
-  cat(sprintf("%s/%s/R/SYKDOMSPULS Registering cluster",Sys.time(),Sys.getenv("COMPUTER")),"\n")
-  cl <- makeCluster(parallel::detectCores())
-  registerDoSNOW(cl)
-  
   for(SYNDROME in sykdomspuls::CONFIG$SYNDROMES){
     cat(sprintf("\n\n%s/%s/R/SYKDOMSPULS ***%s***\n\n",Sys.time(),Sys.getenv("COMPUTER"),SYNDROME))
     flush.console()
     
+    data <- list()
     if(SYNDROME %in% sykdomspuls::CONFIG$SYNDROMES_DOCTOR){
-      data <- readRDS(file = DashboardFolder("data_clean",LatestDatasets()$legekontakt_everyone))  
+      data[["municip"]] <- readRDS(file = DashboardFolder("data_clean",LatestDatasets(SYNDROME=SYNDROME)$legekontakt_everyone))  
     } else {
-      data <- readRDS(file = DashboardFolder("data_clean",LatestDatasets()$everyone_everyone)) 
+      data[["municip"]] <- readRDS(file = DashboardFolder("data_clean",LatestDatasets(SYNDROME=SYNDROME)$everyone_everyone)) 
     }
-    
-    namesDoctor <- names(data)
-    namesDoctor <- c(namesDoctor[!namesDoctor %in% sykdomspuls::CONFIG$SYNDROMES],SYNDROME)
-    data <- melt.data.table(data[, namesDoctor, with=FALSE], measure.vars=c(
-      SYNDROME
-    ), variable.factor=FALSE)
   
-    counties <- unique(data$county)
-    municips <- unique(data$municip)
+    counties <- unique(data[["municip"]]$county)
+    municips <- unique(data[["municip"]]$municip)
     #if(Sys.getenv("COMPUTER")=="test") municips <- municips[stringr::str_detect(municips,"^municip01")]
     locations <- c("Norge",counties,municips)
   
-    ages <- unique(data$age)
+    ages <- unique(data[["municip"]]$age)
   
-    dataCounties <- data[,.(
+    data[["counties"]] <- data[["municip"]][,.(
       consultWithInfluensa=sum(consultWithInfluensa),
       consultWithoutInfluensa=sum(consultWithoutInfluensa),
       pop=sum(pop),
       value=sum(value),
       HelligdagIndikator=max(HelligdagIndikator)
-    ),by=.(date,age,county,variable)]
-    setnames(dataCounties,"county","location")
+    ),by=.(date,age,county)]
+    setnames(data[["counties"]],"county","location")
   
-    dataNorway <- data[,.(
+    data[["norway"]] <- data[["municip"]][,.(
       consultWithInfluensa=sum(consultWithInfluensa),
       consultWithoutInfluensa=sum(consultWithoutInfluensa),
       pop=sum(pop),
       value=sum(value),
       HelligdagIndikator=max(HelligdagIndikator)
-    ),by=.(date,age,variable)]
-    dataNorway[,location:="Norge"]
+    ),by=.(date,age)]
+    data[["norway"]][,location:="Norge"]
   
-    setnames(data,"municip","location")
-    data[,county:=NULL]
-    setcolorder(data,c("variable","date","HelligdagIndikator","location","age","pop","consultWithInfluensa","consultWithoutInfluensa","value"))
-    setcolorder(dataCounties,c("variable","date","HelligdagIndikator","location","age","pop","consultWithInfluensa","consultWithoutInfluensa","value"))
-    setcolorder(dataNorway,c("variable","date","HelligdagIndikator","location","age","pop","consultWithInfluensa","consultWithoutInfluensa","value"))
+    setnames(data[["municip"]],"municip","location")
+    data[["municip"]][,county:=NULL]
+    setcolorder(data[["municip"]],c("date","HelligdagIndikator","location","age","pop","consultWithInfluensa","consultWithoutInfluensa","value"))
+    setcolorder(data[["counties"]],c("date","HelligdagIndikator","location","age","pop","consultWithInfluensa","consultWithoutInfluensa","value"))
+    setcolorder(data[["norway"]],c("date","HelligdagIndikator","location","age","pop","consultWithInfluensa","consultWithoutInfluensa","value"))
   
-    data <- rbindlist(list(dataNorway,dataCounties,data))
+    data <- rbindlist(data)
     
-    cat(sprintf("\n\n%s/%s/R/SYKDOMSPULS Setting keys for binary search - VERY IMPORTANT 3x SPEEDUP\n\n",Sys.time(),Sys.getenv("COMPUTER")),"\n")
-    setkeyv(data,c("variable","location","age"))
-    
-  
     # setting control stack for counties
     analysesCounties <- data.table(expand.grid(
       type=SYNDROME,
@@ -123,7 +110,6 @@ if(!UpdateData()){
       stringsAsFactors = FALSE))
     analysesCounties[,v:=sykdomspuls::CONFIG$VERSION]
   
-  
     # setting control stack for municipalities
     analysesMunicips <- data.table(expand.grid(
       type=SYNDROME,
@@ -132,7 +118,7 @@ if(!UpdateData()){
       granularity=c("Weekly"),
       stringsAsFactors = FALSE))
     analysesMunicips[,v:=sykdomspuls::CONFIG$VERSION]
-    #analysesMunicips <- analysesMunicips[location=="municip0301"]
+    analysesMunicips <- analysesMunicips[location=="municip0301"]
   
     # control stack for comparison of models
     analysesComparison <- vector("list",length(sykdomspuls::CONFIG$VERSIONS))
@@ -159,6 +145,13 @@ if(!UpdateData()){
       opts <- list(progress=ProgressFunction)
       assign("opts", opts, envir = .GlobalEnv)
     }
+    
+    cat(sprintf("\n\n%s/%s/R/SYKDOMSPULS Setting keys for binary search\n\n",Sys.time(),Sys.getenv("COMPUTER")),"\n")
+    setkeyv(data,c("location","age"))
+    
+    cat(sprintf("\n\n%s/%s/R/SYKDOMSPULS Registering cluster\n\n",Sys.time(),Sys.getenv("COMPUTER")),"\n")
+    cl <- makeCluster(parallel::detectCores())
+    registerDoSNOW(cl)
   
     for(i in c(1:4)){
       if(i==1){
@@ -170,6 +163,7 @@ if(!UpdateData()){
       } else if(i==4){
         stack <- analysesMunicips
       }
+      flush.console()
   
       res <- foreach(analysisIter=StackIterator(stack, data, ProgressFunction), .noexport=c("data")) %dopar% {
         library(data.table)
@@ -181,12 +175,12 @@ if(!UpdateData()){
         }
         
         exceptionalFunction <- function(err){
-          sink("/results/sykdomspuls/log.txt")
+          #sink("/results/sykdomspuls/log.txt")
           print(err)
           print(analysisIter$stack)
-          sink()
-          saveRDS(analysisIter$stack,"/results/sykdomspulen/analysesStack.RDS")
-          saveRDS(analysisIter$data,"/results/sykdomspulen/analysisData.RDS")
+          #sink()
+          #saveRDS(analysisIter$stack,"/results/sykdomspulen/analysesStack.RDS")
+          #saveRDS(analysisIter$data,"/results/sykdomspulen/analysisData.RDS")
         }
         retval <- tryCatch(
           RunOneAnalysis(analysesStack=analysisIter$stack,analysisData=analysisIter$data),
@@ -206,10 +200,11 @@ if(!UpdateData()){
         res[location %in% smallMunicips & age != "Totalt", threshold4 := 10 ]
       }
       SaveData(res, DashboardFolder("results",sprintf("%s_%s.RDS",dataFiles[i],SYNDROME)))
+      rm("res")
     }
+    stopCluster(cl)
+    rm("data")
   }
-  stopCluster(cl)
-  rm("data")
   
   # Append all the syndromes together
   for(i in 1:length(dataFiles)){
