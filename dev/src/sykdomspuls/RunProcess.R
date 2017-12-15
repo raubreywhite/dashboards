@@ -57,8 +57,10 @@ if(!UpdateData()){
   cat(sprintf("%s/%s/R/SYKDOMSPULS Have not run analyses and exiting",Sys.time(),Sys.getenv("COMPUTER")),"\n")
   q(save="no", status=21)
 } else {
+  DeleteOldDatasets()
+  
   for(SYNDROME in sykdomspuls::CONFIG$SYNDROMES){
-    cat(sprintf("\n\n%s/%s/R/SYKDOMSPULS ***%s***\n\n",Sys.time(),Sys.getenv("COMPUTER"),SYNDROME))
+    cat(sprintf("\n\n%s/%s/R/SYKDOMSPULS ***%s***\n",Sys.time(),Sys.getenv("COMPUTER"),SYNDROME))
     flush.console()
     
     data <- list()
@@ -146,10 +148,10 @@ if(!UpdateData()){
       assign("opts", opts, envir = .GlobalEnv)
     }
     
-    cat(sprintf("\n\n%s/%s/R/SYKDOMSPULS Setting keys for binary search\n\n",Sys.time(),Sys.getenv("COMPUTER")),"\n")
+    cat(sprintf("%s/%s/R/SYKDOMSPULS Setting keys for binary search\n",Sys.time(),Sys.getenv("COMPUTER")),"\n")
     setkeyv(data,c("location","age"))
     
-    cat(sprintf("\n\n%s/%s/R/SYKDOMSPULS Registering cluster\n\n",Sys.time(),Sys.getenv("COMPUTER")),"\n")
+    cat(sprintf("%s/%s/R/SYKDOMSPULS Registering cluster\n",Sys.time(),Sys.getenv("COMPUTER")),"\n")
     cl <- makeCluster(parallel::detectCores())
     registerDoSNOW(cl)
   
@@ -208,13 +210,13 @@ if(!UpdateData()){
   
   # Append all the syndromes together
   for(i in 1:length(dataFiles)){
-    data <- vector("list",length=length(sykdomspuls::CONFIG$SYNDROMES))
+    res <- vector("list",length=length(sykdomspuls::CONFIG$SYNDROMES))
     for(s in 1:length(data)){
-      data[[s]] <- readRDS(DashboardFolder("results",sprintf("%s_%s.RDS",dataFiles[i],sykdomspuls::CONFIG$SYNDROMES[s])))
+      res[[s]] <- readRDS(DashboardFolder("results",sprintf("%s_%s.RDS",dataFiles[i],sykdomspuls::CONFIG$SYNDROMES[s])))
     }
-    data <- rbindlist(data)
-    SaveData(data, DashboardFolder("results",sprintf("%s.RDS",dataFiles[i])))
-    SaveData(data, DashboardFolder("data_app",sprintf("%s.RDS",dataFiles[i])))
+    res <- rbindlist(res)
+    SaveData(res, DashboardFolder("results",sprintf("%s.RDS",dataFiles[i])))
+    SaveData(res, DashboardFolder("data_app",sprintf("%s.RDS",dataFiles[i])))
     
     # Save last 8 weeks of results
     if(i %in% c(3,4)){
