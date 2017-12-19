@@ -21,6 +21,8 @@ fhi::DashboardInitialise(
   NAME="normomo"
 )
 
+VALID_FYLKE <- c(1:12,14:15,50,18:20)
+
 tryCatch({
   # Your code starts here
 
@@ -52,6 +54,7 @@ tryCatch({
     masterData[,age:=floor(as.numeric(difftime(DoD,DoB,units="days"))/365.25)]
     masterData[is.na(DoR),DoR:=DoD+1]
     masterData[DoR>="2015-09-03",DoR:=DoR+1]
+    masterData[FYLKE %in% c(16,17),FYLKE:=50] # recoding south and north tronderlag to tronderlag
 
     unlink(DashboardFolder("results",RAWmisc::YearWeek(dateDataMinusOneWeek)),recursive=TRUE,force=TRUE)
     dir.create(DashboardFolder("results",RAWmisc::YearWeek(dateDataMinusOneWeek)))
@@ -61,7 +64,7 @@ tryCatch({
 
     allResults <- vector("list",100)
     pb <- RAWmisc::ProgressBarCreate(min=0,max=20,flush=TRUE)
-    for(i in c(1:12,14:20,0)){
+    for(i in c(VALID_FYLKE,0)){
       if(i==0){
         dataAnalysis <- as.data.frame(masterData[!is.na(age),c("DoD","DoR","age"),with=F])
         saveRDS(dataAnalysis,file=DashboardFolder("data_clean",paste0("data_",f,".RDS")))
@@ -193,7 +196,7 @@ tryCatch({
     temp[,location:=as.character(FYLKE)]
     tempAll <- temp[,.(N=sum(N)),by=.(deathYear,deathWeek,ageCat)]
     tempAll[,location:="Norway"]
-    temp <- temp[FYLKE %in% c(1:12,14:20)]
+    temp <- temp[FYLKE %in% VALID_FYLKE]
     temp[,FYLKE:=NULL]
     temp <- rbind(temp,tempAll)
     temp[,ageCat:=as.character(ageCat)]
@@ -201,7 +204,7 @@ tryCatch({
     tempAll[,ageCat:="Total"]
     temp <- rbind(temp,tempAll)
     temp[,ageCat:=factor(ageCat,levels=c("[0,4]","(4,14]","(14,64]","(64,200]","Total"))]
-    temp[,location:=factor(location,levels=c(1:12,14:20,"Norway"))]
+    temp[,location:=factor(location,levels=c(VALID_FYLKE,"Norway"))]
     setcolorder(temp,c("deathYear","deathWeek","ageCat","location","N"))
     setorder(temp,deathYear,deathWeek,ageCat,location)
     
