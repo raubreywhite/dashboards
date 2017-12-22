@@ -1,0 +1,16 @@
+---
+title: "Sykdomspulsen"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(ggplot2)
+library(ggrepel)
+library(data.table)
+library(fhi)
+library(magrittr)
+```

@@ -25,6 +25,8 @@ resRecentLine <- readRDS("/data_app/sykdomspuls/resRecentLine.RDS")[date>=dateMi
 resYearLineMunicip <- readRDS("/data_app/sykdomspuls/resYearLineMunicip.RDS")[displayDay>=dateMinRestrictedLine & displayDay<=dateMax]
 resRecentLine[,date:=as.Date(date)]
 
+#resYearLineMunicip[location=="municip1151"]
+
 dailyCounties <- unique(resRecentLine$location)
 names(dailyCounties)  <- unique(resRecentLine$locationName)
 weeklyCounties <- unique(resYearLine$location)

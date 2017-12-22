@@ -3,12 +3,6 @@ title: "Sykdomspulsen"
 output: 
   flexdashboard::flex_dashboard:
     orientation: rows
-    social: menu
-    smooth_scroll: true
-    theme: cosmo
-    navbar:
-      - { title: 'Trinngraf <input id="stepGraph" type="checkbox"/>', align: right }
-      - { title: 'Fargeblind <input id="colourBlind" type="checkbox"/>', align: right }
 runtime: shiny
 ---
 
@@ -121,9 +115,12 @@ Oversikt (ukentlig)
 
 
 weeklyBarometerPlotBrushData <- reactive({
+  print(xtabs(~resYearLine$type))
+  print(input$weeklyBarometerType)
   retData <- resYearLine[resYearLine$type==input$weeklyBarometerType & 
                            resYearLine$location==input$weeklyBarometerCounty &
                            resYearLine$age==input$weeklyBarometerAge,]
+  print(nrow(retData))
   return(retData)
 })
 

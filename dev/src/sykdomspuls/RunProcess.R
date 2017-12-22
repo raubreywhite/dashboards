@@ -211,7 +211,7 @@ if(!UpdateData()){
   # Append all the syndromes together
   for(i in 1:length(dataFiles)){
     res <- vector("list",length=length(sykdomspuls::CONFIG$SYNDROMES))
-    for(s in 1:length(data)){
+    for(s in 1:length(sykdomspuls::CONFIG$SYNDROMES)){
       res[[s]] <- readRDS(DashboardFolder("results",sprintf("%s_%s.RDS",dataFiles[i],sykdomspuls::CONFIG$SYNDROMES[s])))
     }
     res <- rbindlist(res)
