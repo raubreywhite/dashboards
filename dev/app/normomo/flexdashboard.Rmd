@@ -3,9 +3,6 @@ title: "NorMOMO"
 output: 
   flexdashboard::flex_dashboard:
     orientation: rows
-    social: menu
-    smooth_scroll: true
-    theme: cosmo
 runtime: shiny
 ---
 
