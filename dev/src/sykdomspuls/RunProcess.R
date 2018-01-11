@@ -230,6 +230,7 @@ if(!UpdateData()){
   ## GENERATE LIST OF OUTBREAKS
   cat(sprintf("%s/%s/R/SYKDOMSPULS Generate list of outbreaks",Sys.time(),Sys.getenv("COMPUTER")),"\n")
   ListOutbreaks()
+  OutbreakAlertExternal()
 
   # Done with analyses
   cat(sprintf("%s/%s/R/SYKDOMSPULS Done with all analyses",Sys.time(),Sys.getenv("COMPUTER")),"\n")
@@ -244,5 +245,4 @@ if(!UpdateData()){
   cat(sprintf("%s/%s/R/SYKDOMSPULS Finished analyses and exiting",Sys.time(),Sys.getenv("COMPUTER")),"\n")
   quit(save="no", status=0)
 } 
-
 
