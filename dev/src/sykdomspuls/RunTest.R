@@ -69,6 +69,30 @@ if(res=="0"){
 
 x <- process$kill()
 
+# check external email works
+library(sykdomspuls)
+DashboardFolder <- fhi::DashboardFolder
+fhi::DashboardInitialise(
+  STUB="/",
+  SRC="src",
+  NAME="sykdomspuls"
+)
+
+res <- tryCatch(EmailAlertExternal(),
+  warning=function(war){
+    return(-1)
+  },
+  error=function(err){
+    return(-1)
+  })
+if(res==0){
+  cat("\n**PASS 5**\n")
+  a$add_result("sykdomspuls","EmailAlertExternal",testthat::expectation("success","Pass"))
+} else {
+  cat("\n**FAIL 5**\n")
+  a$add_result("sykdomspuls","EmailAlertExternal",testthat::expectation("error","Fail"))
+}
+
 a$end_context("sykdomspuls")
 a$end_reporter()
 close(a$out)
