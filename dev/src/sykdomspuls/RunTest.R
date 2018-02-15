@@ -78,7 +78,8 @@ fhi::DashboardInitialise(
   NAME="sykdomspuls"
 )
 
-res <- tryCatch(EmailAlertExternal(),
+res <- tryCatch(
+  EmailAlertExternal(alerts = readxl::read_excel(file.path("/etc", "gmailr", "emails_sykdomspuls_alert_test.xlsx"))),
   warning=function(war){
     return(-1)
   },
