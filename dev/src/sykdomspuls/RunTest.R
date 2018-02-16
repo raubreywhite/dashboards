@@ -79,7 +79,10 @@ fhi::DashboardInitialise(
 )
 
 res <- tryCatch(
-  EmailAlertExternal(alerts = readxl::read_excel(file.path("/etc", "gmailr", "emails_sykdomspuls_alert_test.xlsx"))),
+  EmailExternal(
+    alerts = readxl::read_excel(file.path("/etc", "gmailr", "emails_sykdomspuls_alert_test.xlsx")),
+    isTest=TRUE
+  ),
   warning=function(war){
     return(-1)
   },
@@ -88,11 +91,31 @@ res <- tryCatch(
   })
 if(res==0){
   cat("\n**PASS 5**\n")
-  a$add_result("sykdomspuls","EmailAlertExternal",testthat::expectation("success","Pass"))
+  a$add_result("sykdomspuls","EmailExternal",testthat::expectation("success","Pass"))
 } else {
   cat("\n**FAIL 5**\n")
-  a$add_result("sykdomspuls","EmailAlertExternal",testthat::expectation("error","Fail"))
+  a$add_result("sykdomspuls","EmailExternal",testthat::expectation("error","Fail"))
 }
+
+# check external email works
+res <- tryCatch(
+  EmailInternal(isTest=TRUE),
+  warning=function(war){
+    return(-1)
+  },
+  error=function(err){
+    return(-1)
+  })
+if(res==0){
+  cat("\n**PASS 6**\n")
+  a$add_result("sykdomspuls","EmailInternal",testthat::expectation("success","Pass"))
+} else {
+  cat("\n**FAIL 6**\n")
+  a$add_result("sykdomspuls","EmailInternal",testthat::expectation("error","Fail"))
+}
+
+#norwayMunicipMerging <- RAWmisc::GenNorwayMunicipMerging()
+#skeleton <- data.table(expand.grid(unique(norwayMunicipMerging$municip),unique(d$age),unique(d$date)))
 
 a$end_context("sykdomspuls")
 a$end_reporter()

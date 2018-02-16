@@ -58,25 +58,25 @@ if(!UpdateData()){
   q(save="no", status=21)
 } else {
   DeleteOldDatasets()
-  
+
   for(SYNDROME in sykdomspuls::CONFIG$SYNDROMES){
     cat(sprintf("\n\n%s/%s/R/SYKDOMSPULS ***%s***\n",Sys.time(),Sys.getenv("COMPUTER"),SYNDROME))
     flush.console()
-    
+
     data <- list()
     if(SYNDROME %in% sykdomspuls::CONFIG$SYNDROMES_DOCTOR){
-      data[["municip"]] <- readRDS(file = DashboardFolder("data_clean",LatestDatasets(SYNDROME=SYNDROME)$legekontakt_everyone))  
+      data[["municip"]] <- readRDS(file = DashboardFolder("data_clean",LatestDatasets(SYNDROME=SYNDROME)$legekontakt_everyone))
     } else {
-      data[["municip"]] <- readRDS(file = DashboardFolder("data_clean",LatestDatasets(SYNDROME=SYNDROME)$everyone_everyone)) 
+      data[["municip"]] <- readRDS(file = DashboardFolder("data_clean",LatestDatasets(SYNDROME=SYNDROME)$everyone_everyone))
     }
-  
+
     counties <- unique(data[["municip"]]$county)
     municips <- unique(data[["municip"]]$municip)
     #if(Sys.getenv("COMPUTER")=="test") municips <- municips[stringr::str_detect(municips,"^municip01")]
     locations <- c("Norge",counties,municips)
-  
+
     ages <- unique(data[["municip"]]$age)
-  
+
     data[["counties"]] <- data[["municip"]][,.(
       consultWithInfluensa=sum(consultWithInfluensa),
       consultWithoutInfluensa=sum(consultWithoutInfluensa),
@@ -85,7 +85,7 @@ if(!UpdateData()){
       HelligdagIndikator=max(HelligdagIndikator)
     ),by=.(date,age,county)]
     setnames(data[["counties"]],"county","location")
-  
+
     data[["norway"]] <- data[["municip"]][,.(
       consultWithInfluensa=sum(consultWithInfluensa),
       consultWithoutInfluensa=sum(consultWithoutInfluensa),
@@ -94,15 +94,15 @@ if(!UpdateData()){
       HelligdagIndikator=max(HelligdagIndikator)
     ),by=.(date,age)]
     data[["norway"]][,location:="Norge"]
-  
+
     setnames(data[["municip"]],"municip","location")
     data[["municip"]][,county:=NULL]
     setcolorder(data[["municip"]],c("date","HelligdagIndikator","location","age","pop","consultWithInfluensa","consultWithoutInfluensa","value"))
     setcolorder(data[["counties"]],c("date","HelligdagIndikator","location","age","pop","consultWithInfluensa","consultWithoutInfluensa","value"))
     setcolorder(data[["norway"]],c("date","HelligdagIndikator","location","age","pop","consultWithInfluensa","consultWithoutInfluensa","value"))
-  
+
     data <- rbindlist(data)
-    
+
     # setting control stack for counties
     analysesCounties <- data.table(expand.grid(
       type=SYNDROME,
@@ -111,7 +111,7 @@ if(!UpdateData()){
       granularity=c("Daily","Weekly"),
       stringsAsFactors = FALSE))
     analysesCounties[,v:=sykdomspuls::CONFIG$VERSION]
-  
+
     # setting control stack for municipalities
     analysesMunicips <- data.table(expand.grid(
       type=SYNDROME,
@@ -121,7 +121,7 @@ if(!UpdateData()){
       stringsAsFactors = FALSE))
     analysesMunicips[,v:=sykdomspuls::CONFIG$VERSION]
     #analysesMunicips <- analysesMunicips[location=="municip0301"]
-  
+
     # control stack for comparison of models
     analysesComparison <- vector("list",length(sykdomspuls::CONFIG$VERSIONS))
     for(vx in sykdomspuls::CONFIG$VERSIONS){
@@ -130,31 +130,31 @@ if(!UpdateData()){
       analysesComparison[[vx]] <- copy(temp)
     }
     analysesComparison <- rbindlist(analysesComparison)
-    
+
     if(SYNDROME==sykdomspuls::CONFIG$SYNDROMES[1]){
       numProcessesPerSyndrome <- nrow(analysesComparison)+nrow(analysesCounties)+nrow(analysesMunicips)
       numProcesses <- numProcessesPerSyndrome * length(sykdomspuls::CONFIG$SYNDROMES)
-      
+
       pb <- RAWmisc::ProgressBarCreate(max=numProcesses)
       assign("pb", pb, envir = .GlobalEnv)
-      
+
       progressIndex <- 0
       assign("progressIndex", progressIndex, envir = .GlobalEnv)
-      
+
       ProgressFunction <- function(n) RAWmisc::ProgressBarSet(pb, progressIndex + n)
       assign("ProgressFunction", ProgressFunction, envir = .GlobalEnv)
-      
+
       opts <- list(progress=ProgressFunction)
       assign("opts", opts, envir = .GlobalEnv)
     }
-    
+
     cat(sprintf("%s/%s/R/SYKDOMSPULS Setting keys for binary search\n",Sys.time(),Sys.getenv("COMPUTER")),"\n")
     setkeyv(data,c("location","age"))
-    
+
     cat(sprintf("%s/%s/R/SYKDOMSPULS Registering cluster\n",Sys.time(),Sys.getenv("COMPUTER")),"\n")
     cl <- makeCluster(parallel::detectCores())
     registerDoSNOW(cl)
-  
+
     for(i in c(1:4)){
       if(i==1){
         stack <- analysesComparison
@@ -166,7 +166,7 @@ if(!UpdateData()){
         stack <- analysesMunicips
       }
       flush.console()
-  
+
       res <- foreach(analysisIter=StackIterator(stack, data, ProgressFunction), .noexport=c("data")) %dopar% {
         library(data.table)
         if(Sys.getenv("RSTUDIO") == "1"){
@@ -175,7 +175,7 @@ if(!UpdateData()){
         } else {
         	library(sykdomspuls)
         }
-        
+
         exceptionalFunction <- function(err){
           #sink("/results/sykdomspuls/log.txt")
           print(err)
@@ -188,13 +188,13 @@ if(!UpdateData()){
           RunOneAnalysis(analysesStack=analysisIter$stack,analysisData=analysisIter$data),
           error=exceptionalFunction
           )
-  
+
         if(i==4) retval[, county := GetCountyFromMunicip(analysisIter$stack$location, norwayLocations=norwayLocations)]
         retval
       }
       assign("progressIndex", progressIndex + nrow(stack), envir = .GlobalEnv)
       res <- rbindlist(res)
-      
+
       # Performing cleaning on small municipalities
       if(i==4){
         res[location %in% smallMunicips & age != "Totalt", n := 0 ]
@@ -207,7 +207,7 @@ if(!UpdateData()){
     stopCluster(cl)
     rm("data")
   }
-  
+
   # Append all the syndromes together
   for(i in 1:length(dataFiles)){
     res <- vector("list",length=length(sykdomspuls::CONFIG$SYNDROMES))
@@ -217,7 +217,7 @@ if(!UpdateData()){
     res <- rbindlist(res)
     SaveData(res, DashboardFolder("results",sprintf("%s.RDS",dataFiles[i])))
     SaveData(res, DashboardFolder("data_app",sprintf("%s.RDS",dataFiles[i])))
-    
+
     # Save last 8 weeks of results
     if(i %in% c(3,4)){
       saveWkYrs <- rev(sort(unique(res$wkyr)))[1:8]
@@ -229,8 +229,8 @@ if(!UpdateData()){
 
   ## GENERATE LIST OF OUTBREAKS
   cat(sprintf("%s/%s/R/SYKDOMSPULS Generate list of outbreaks",Sys.time(),Sys.getenv("COMPUTER")),"\n")
-  ListOutbreaks()
-  OutbreakAlertExternal()
+  GenerateOutbreakListInternal()
+  GenerateOutbreakListExternal()
 
   # Done with analyses
   cat(sprintf("%s/%s/R/SYKDOMSPULS Done with all analyses",Sys.time(),Sys.getenv("COMPUTER")),"\n")
@@ -240,9 +240,8 @@ if(!UpdateData()){
 
   ## SENDING OUT EMAILS
   EmailNotificationOfNewResults()
-  EmailNotificationUtbrudd()
 
   cat(sprintf("%s/%s/R/SYKDOMSPULS Finished analyses and exiting",Sys.time(),Sys.getenv("COMPUTER")),"\n")
   quit(save="no", status=0)
-} 
+}
 
