@@ -83,9 +83,11 @@ fhi::DashboardInitialise(
 res <- tryCatch(
   EmailInternal(isTest=TRUE),
   warning=function(war){
+    print(war)
     return(-1)
   },
   error=function(err){
+    print(err)
     return(-1)
   })
 if(res==0){
@@ -104,9 +106,11 @@ res <- tryCatch(
     forceNoOutbreak=TRUE
   ),
   warning=function(war){
+    print(war)
     return(-1)
   },
   error=function(err){
+    print(err)
     return(-1)
   })
 if(res==0){
@@ -124,9 +128,11 @@ res <- tryCatch(
     forceYesOutbreak=TRUE
   ),
   warning=function(war){
+    print(war)
     return(-1)
   },
   error=function(err){
+    print(err)
     return(-1)
   })
 if(res==0){
