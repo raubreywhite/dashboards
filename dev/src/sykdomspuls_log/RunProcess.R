@@ -99,13 +99,12 @@ if(length(ips)>0){
   if(exists("previousLocations")){
     locations <- rbind(locations,previousLocations)
   }
+  saveRDS(locations,file=fhi::DashboardFolder("data_clean","ips.RDS"))
 } else if(exists("previousLocations")){
   locations <- previousLocations
 } else {
   stop("No locations (IPs) available")
 }
-
-saveRDS(locations,file=fhi::DashboardFolder("data_clean","ips.RDS"))
 
 d <- merge(d,locations,by="ipForwarded")
 setorder(d,ipForwarded,ipRaw,date,time)
