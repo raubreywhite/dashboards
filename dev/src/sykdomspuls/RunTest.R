@@ -7,7 +7,7 @@ Sys.setenv(COMPUTER=COMPUTER_NAME)
 for(baseFolder in c("/data_clean","/results","/data_app")){
   files <- list.files(file.path(baseFolder,"sykdomspuls"))
   if(length(files)>0){
-    #for(f in files) unlink(file.path(baseFolder,"sykdomspuls",f))
+    for(f in files) unlink(file.path(baseFolder,"sykdomspuls",f))
   }
 }
 
@@ -20,7 +20,7 @@ a$out <- file(file.path("/junit","sykdomspuls.xml"), "w+")
 a$start_context("sykdomspuls")
 
 # Run process
-if(FALSE){
+
 output <- processx::run("Rscript","/src/sykdomspuls/RunProcess.R", error_on_status=F, echo=T)
 cat("\n\nstdout\n\n")
 cat(output$stdout)
@@ -68,7 +68,7 @@ if(res=="0"){
 }
 
 x <- process$kill()
-}
+
 # check external email works
 library(sykdomspuls)
 DashboardFolder <- fhi::DashboardFolder
