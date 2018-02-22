@@ -3,7 +3,7 @@ COMPUTER_NAME <- readLines(con,n=1)
 close(con)
 Sys.setenv(COMPUTER=COMPUTER_NAME)
 
-for(baseFolder in c("/data_clean","/results","/data_app")){
+for(baseFolder in c("/results","/data_app")){
   files <- list.files(file.path(baseFolder,"sykdomspuls_log"))
   if(length(files)>0){
     for(f in files) unlink(file.path(baseFolder,"sykdomspuls_log",f))

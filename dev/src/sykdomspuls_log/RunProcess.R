@@ -84,20 +84,25 @@ if(file.exists(fhi::DashboardFolder("data_clean","ips.RDS"))){
   ips <- ips[!ips %in% previousIPs]
 }
 
-locations <- list()
-desiredIPS <- split(ips, ceiling(seq_along(ips)/20))
-for(i in 1:length(desiredIPS)){
-  print(i)
-  try({
-    locations[[i]] <- data.table(rgeolocate::ip_api(desiredIPS[[i]]))
-    locations[[i]][,ipForwarded:=desiredIPS[[i]]]
-  },TRUE)
-  Sys.sleep(2)
-}
-locations <- rbindlist(locations)
-
-if(exists("previousLocations")){
-  locations <- rbind(locations,previousLocations)
+if(length(ips)>0){
+  locations <- list()
+  desiredIPS <- split(ips, ceiling(seq_along(ips)/20))
+  for(i in 1:length(desiredIPS)){
+    print(i)
+    try({
+      locations[[i]] <- data.table(rgeolocate::ip_api(desiredIPS[[i]]))
+      locations[[i]][,ipForwarded:=desiredIPS[[i]]]
+    },TRUE)
+    Sys.sleep(2)
+  }
+  locations <- rbindlist(locations)
+  if(exists("previousLocations")){
+    locations <- rbind(locations,previousLocations)
+  }
+} else if(exists("previousLocations")){
+  locations <- previousLocations
+} else {
+  stop("No locations (IPs) available")
 }
 
 saveRDS(locations,file=fhi::DashboardFolder("data_clean","ips.RDS"))
