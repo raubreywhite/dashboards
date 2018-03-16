@@ -1,3 +1,9 @@
+#* @filter cors
+cors <- function(res) {
+  res$setHeader("Access-Control-Allow-Origin", "*")
+  plumber::forward()
+}
+
 #* @filter logger
 function(req, res){
   print(ls(req))
@@ -31,6 +37,18 @@ test <- function(x){
 #* @get /v
 test <- function(){
   "1_0"
+  #unique(d$locationName)
+}
+
+#* @preempt logger
+#* @get /v1_0_NamesTypes
+v1_0_NamesTypes <- function(){
+  retval <- as.data.frame(types)
+  retval$names <- row.names(retval)
+  row.names(retval) <- NULL
+  names(retval) <- c("value","name")
+  retval$short <- names(typesShort)
+  jsonlite::toJSON(retval)
   #unique(d$locationName)
 }
 
@@ -89,11 +107,8 @@ v1_0_DataWeeklySignal <- function(xwkyr=NULL,xlevel="fylke"){
 v1_0_DataDailyLine <- function(xtype="respiratoryexternal",xage="Totalt",xname="Norge"){
   library(data.table)
   data <- dr[location==xname & age==xage & type==xtype]
-  if(xtype=="respiratory" || xtype=="respiratoryexternal"){
-    prettyType <- "Luftveisinfeksjoner"
-  } else {
-    prettyType <- "Mage-tarminfeksjoner"
-  }
+  prettyType <- names(types)[types==xtype]
+  
   if(xage=="Totalt"){
     prettyAge <- "alle aldersgrupper"
   } else {
@@ -141,11 +156,8 @@ v1_0_DataWeeklyLine <- function(xtype="respiratoryexternal",xage="Totalt",xname=
   if(nrow(data)==0){
     data <- dk[location==xname & age==xage & type==xtype,]
   }
-  if(xtype=="respiratory" || xtype=="respiratoryexternal"){
-    prettyType <- "Luftveisinfeksjoner"
-  } else {
-    prettyType <- "Mage-tarminfeksjoner"
-  }
+  prettyType <- names(types)[types==xtype]
+  
   if(xage=="Totalt"){
     prettyAge <- "alle aldersgrupper"
   } else {
@@ -227,7 +239,7 @@ v1_0_DataWeeklyOverview <- function(xtype="respiratoryexternal",xage="Totalt",xn
 
 #* @get /v1_0_DataWeeklyOverviewKommune
 v1_0_DataWeeklyOverviewKommune <- function(xname="municip0301"){
-  data <- dk[location %in% xname & type %in% c("respiratoryexternal","gastro"),]
+  data <- dk[location %in% xname,]
 
   #data$x <- 1:nrow(data)
   labs <- unique(data[,c("xRaw",
@@ -243,8 +255,8 @@ v1_0_DataWeeklyOverviewKommune <- function(xname="municip0301"){
   
   data <- data[xRaw>max(xRaw-8),]
   data$age <- factor(data$age,levels=c("Totalt","0-4","5-14","15-19","20-29","30-64","65+"))
-  data$type <- factor(data$type,levels=c("respiratoryexternal","gastro"))
-  levels(data$type) <- c("Luftvei","Mage-tarm")
+  data$type <- factor(data$type,levels=typesShort)
+  levels(data$type) <- names(typesShort)
   setorder(data,type,age)
   titleMain <- data$locationName[1]
   data$locationName <- paste0(data$type," - ",data$age)

@@ -6,6 +6,7 @@ library(fhi)
 
 # load data in 'global' chunk so it can be shared by all users of the dashboard
 resYearLine <- readRDS("/data_app/sykdomspuls/resYearLine.RDS")
+CONFIG <- readRDS("/data_app/sykdomspuls/config.RDS")
 
 GetLatestDataTime <- function() {
   if(file.exists("/data_app/sykdomspuls/done.txt")){
@@ -16,13 +17,21 @@ GetLatestDataTime <- function() {
 }
 latestDataTime <- GetLatestDataTime()
 
+# specifying types and ages from config file
+weeklyTypes <- dailyTypes <- CONFIG$SYNDROMES[CONFIG$SYNDROMES %in% CONFIG$SYNDROMES_ALERT_INTERNAL]
+weeklyAges <- dailyAges <- CONFIG$AGES
+
 dateMax <- max(resYearLine$displayDay)
 dateMinRestrictedRecent <- dateMax-365
 dateMinRestrictedLine <- dateMax-365*15
 
 outbreaks <- readRDS("/data_app/sykdomspuls/outbreaks.RDS")
-resRecentLine <- readRDS("/data_app/sykdomspuls/resRecentLine.RDS")[date>=dateMinRestrictedRecent & date<=dateMax]
-resYearLineMunicip <- readRDS("/data_app/sykdomspuls/resYearLineMunicip.RDS")[displayDay>=dateMinRestrictedLine & displayDay<=dateMax]
+resRecentLine <- readRDS("/data_app/sykdomspuls/resRecentLine.RDS")[
+  date>=dateMinRestrictedRecent & date<=dateMax & 
+  type %in% weeklyTypes]
+resYearLineMunicip <- readRDS("/data_app/sykdomspuls/resYearLineMunicip.RDS")[
+  displayDay>=dateMinRestrictedLine & displayDay<=dateMax & 
+  type %in% weeklyTypes]
 resRecentLine[,date:=as.Date(date)]
 
 #resYearLineMunicip[location=="municip1151"]
@@ -39,11 +48,9 @@ resRecentLineStack <- unique(resRecentLine[,c("type","location","age"),with=F])
 resYearLineStack <- unique(resYearLine[,c("type","location","age"),with=F])
 resYearLineMunicipStack <- unique(resYearLineMunicip[,c("type","location","age","county"),with=F])
 
-weeklyTypes <- dailyTypes <- c(
-  "Luftveisinfeksjoner" = "respiratory",
-  "Mage-tarminfeksjoner" = "gastro",
-  "Influensa" = "influensa")
-weeklyAges <- dailyAges <- c("Totalt","0-4","5-14","15-19","20-29","30-64","65+")
+# removing external syndromes
+outbreaks[["df"]] <- outbreaks[["df"]][type %in% weeklyTypes]
+outbreaks[["dk"]] <- outbreaks[["dk"]][type %in% weeklyTypes]
 
 weeklyValues <- c(
   "Konsultasjoner"="consults",

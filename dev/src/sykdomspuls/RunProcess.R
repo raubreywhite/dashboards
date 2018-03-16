@@ -24,6 +24,9 @@ fhi::DashboardInitialise(
   NAME="sykdomspuls"
 )
 
+SaveData(sykdomspuls::CONFIG, DashboardFolder("results","config.RDS"))
+SaveData(sykdomspuls::CONFIG, DashboardFolder("data_app","config.RDS"))
+
 dataFiles <- c("resComparisons", "resRecentLine", "resYearLine", "resYearLineMunicip")
 
 smallMunicips <- c(

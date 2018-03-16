@@ -20,12 +20,21 @@ SubstrRight <- Vectorize(SubstrRight.int)
 
 if(!file.exists(file.path(DATA,"log"))) dir.create(file.path(DATA,"log"))
 
+CONFIG <- readRDS(file.path(DATA,"config.RDS"))
+types <- CONFIG$SYNDROMES[CONFIG$SYNDROMES %in% CONFIG$SYNDROMES_ALERT_EXTERNAL]
+typesShort <- CONFIG$SYNDROMES_SHORT[CONFIG$SYNDROMES_SHORT %in% CONFIG$SYNDROMES_ALERT_EXTERNAL]
+ages <- CONFIG$AGES
+
 dr <- readRDS(file.path(DATA,"resRecentLine.RDS"))
 dateMax <- max(dr$date)
 dateMin <- as.character(as.Date(dateMax)-365)
 dr <- dr[date>=dateMin]
 d <- readRDS(file.path(DATA,"resYearLine.RDS"))
 dk <- readRDS(file.path(DATA,"resYearLineMunicip.RDS"))
+
+dr <- dr[type %in% types]
+d <- d[type %in% types]
+dk <- dk[type %in% types]
 
 #dr[,age:=gsub("\\+","p",age)]
 #d[,age:=gsub("\\+","p",age)]
@@ -129,10 +138,6 @@ drStack <- unique(dr[,c("type","location","age"),with=F])
 dStack <- unique(d[,c("type","location","age"),with=F])
 dkStack <- unique(dk[,c("type","location","age","county"),with=F])
 
-types <- c(
-  "Øvre-luftvei diagnose" = "respiratoryexternal",
-  "Mage-tarm diagnose" = "gastro")
-
 outbreaks <- readRDS(file.path(DATA,"outbreaks.RDS"))
 for(i in c("df","dk")){
   outbreaks[[i]] <- outbreaks[[i]][type %in% types & !is.na(sumCum)]
@@ -149,7 +154,7 @@ setcolorder(outbreaks[["dk"]],c("type","wkyr","Sykdom","age","countyName","High"
 setnames(outbreaks[["dk"]],c("type","wkyr","Sykdom","Alder","Fylke","Kommuner","Gj. Z verdi","Eksess tilfeller"))
 
 r <- plumb(file.path(PLUMB,"plumb.R"))
-r$run(port=8000)
+r$run(host='0.0.0.0',port=8000)
 
 # curl http://localhost:8000/test?x=3
 
