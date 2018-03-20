@@ -9,9 +9,9 @@ suppressMessages(library(data.table))
 suppressMessages(library(ggplot2))
 
 if(Sys.getenv("RSTUDIO") == "1"){
-  devtools::load_all("/packages/dashboards_normomo/", export_all=FALSE)
+  devtools::load_all("/packages/dashboards_sykdomspuls_log/", export_all=FALSE)
 } else {
-  library(normomo)
+  library(sykdomspulslog)
 }
 
 DashboardFolder <- fhi::DashboardFolder

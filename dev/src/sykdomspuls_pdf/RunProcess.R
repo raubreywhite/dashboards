@@ -3,15 +3,15 @@ COMPUTER_NAME <- readLines(con,n=1)
 close(con)
 Sys.setenv(COMPUTER=COMPUTER_NAME)
 
-cat(sprintf("%s/%s/R/sykdomspuls_log STARTING UP!!",Sys.time(),Sys.getenv("COMPUTER")),"\n")
+cat(sprintf("%s/%s/R/sykdomspuls_pdf STARTING UP!!",Sys.time(),Sys.getenv("COMPUTER")),"\n")
 
 suppressMessages(library(data.table))
 suppressMessages(library(ggplot2))
 
 if(Sys.getenv("RSTUDIO") == "1"){
-  #devtools::load_all("/packages/dashboards_normomo/", export_all=FALSE)
+  devtools::load_all("/packages/dashboards_sykdomspuls_pdf/", export_all=FALSE)
 } else {
-  #library(normomo)
+  library(sykdomspulspdf)
 }
 
 DashboardFolder <- fhi::DashboardFolder
