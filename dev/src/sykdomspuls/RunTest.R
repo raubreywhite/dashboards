@@ -143,6 +143,28 @@ if(res==0){
   a$add_result("sykdomspuls","EmailExternal_forceYesOutbreak",testthat::expectation("error","Fail"))
 }
 
+res <- tryCatch(
+  EmailNotificationOfNewData(
+    files="test_file_name.txt",
+    isTest=TRUE
+  ),
+  warning=function(war){
+    print(war)
+    return(-1)
+  },
+  error=function(err){
+    print(err)
+    return(-1)
+  })
+if(res==0){
+  cat("\n**PASS 8**\n")
+  a$add_result("sykdomspuls","EmailNotificationOfNewData",testthat::expectation("success","Pass"))
+} else {
+  cat("\n**FAIL 8**\n")
+  a$add_result("sykdomspuls","EmailNotificationOfNewData",testthat::expectation("error","Fail"))
+}
+
+
 a$end_context("sykdomspuls")
 a$end_reporter()
 close(a$out)
