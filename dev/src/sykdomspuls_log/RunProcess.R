@@ -109,7 +109,7 @@ if(length(ips)>0){
 d <- merge(d,locations,by="ipForwarded")
 setorder(d,ipForwarded,ipRaw,date,time)
 d <- d[status=="success"]
-d[page=="/test" & args=="?x=1",session:=c(1:.N),by=ipForwarded]
+d[page=="/test",session:=c(1:.N),by=ipForwarded]
 d[,session:=zoo::na.locf(session)]
 d <- d[page!="/test"]
 xtabs(~d$country_code)
@@ -118,8 +118,11 @@ xtabs(~d$city_name)
 xtabs(~d$region_name)
 xtabs(~d$page)
 
-d <- d[date>="2017-08-15" & !(city_name=="Oslo" & isp=="UNINETT AS")]
+xtabs(~d$date)
 d[,yrwk:=RAWmisc::YearWeek(date)]
+xtabs(~d$yrwk)
+d <- d[date>="2017-08-15" & !(city_name=="Oslo" & isp=="UNINETT AS")]
+
 
 page <- d[,.(pageVisits=.N),by=.(yrwk,page)]
 arg <- d[,.(pageVisits=.N),by=.(yrwk,args,page)]
