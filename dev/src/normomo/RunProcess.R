@@ -225,9 +225,9 @@ tryCatch({
       TEST_EMAILS <- TRUE
     }
     EmailInternal(folderResultsYearWeek=file.path(fhi::DashboardFolder("results",RAWmisc::YearWeek(dateDataMinusOneWeek))),
-                  test=TEST_EMAILS)
+                  isTest=TEST_EMAILS)
     EmailSSI(folderResultsYearWeek=file.path(fhi::DashboardFolder("results",RAWmisc::YearWeek(dateDataMinusOneWeek))),
-             test=TEST_EMAILS)
+             isTest=TEST_EMAILS)
 
   }
 
