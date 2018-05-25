@@ -40,15 +40,16 @@ if(nrow(files)==0){
     cat(sprintf("%s/%s/R/SYKDOMSPULSSYKDOMSPULS_pdf Generating monthly pdf",Sys.time(),Sys.getenv("COMPUTER")),"\n")
 
 
-  #Alle konsultasjoner:
+#Alle konsultasjoner:
   data <- CleanData(d)
   alle <- tapply(data$gastro, data[, c("year","week")], sum)
   weeknow <-findLastWeek(lastestUpdate,alle) ### need to be fixed
   cat(paste("Last week",weeknow,sep = " "))
 
+##BY FYLKE
 for (SYNDROM in CONFIG$SYNDROMES) {
-      ###########################################
-      for (f in fylke$Fylkename) {
+    ###########################################
+    for (f in fylke$Fylkename) {
 
         Fylkename=f
         In <- infiles[V1==f]
@@ -77,19 +78,51 @@ for (SYNDROM in CONFIG$SYNDROMES) {
                  fhi::DashboardFolder("results",paste(f,"_",SYNDROM,"tarm.odt", sep="")))
 
         dev.off()
-      }
-
-      Sys.setenv(LD_LIBRARY_PATH="/usr/lib/libreoffice/program")
-      withr::with_dir(fhi::DashboardFolder("results"), system("loffice --headless --convert-to pdf *.odt"))
+    }
 
 }
 
+## whole norway
+for (SYNDROM in CONFIG$SYNDROMES) {  
+  Fylkename="Norge"
+  #All consultaion per fylke:
+  data <- CleanData(d)
+  alle <- tapply(getdataout(data,SYNDROM), data[, c("year","week")], sum)
+  yrange <- max(alle,na.rm=T)+(roundUpNice(max(alle,na.rm=T))*.20)
+  
+  #PLOT ALLE
+  CreatePlots1(alle,weeknow = weeknow, Ukenummer = Ukenummer,
+               title=paste(firstup(SYNDROM),"-tarminfeksjoner, Norge, alle aldersgrupper", sep ="" ),
+               yrange=yrange)
+  p <<-recordPlot()
+  
+  #PLOT BY AGE
+  CreatePlots2(d1=data,weeknow = weeknow, Ukenummer = Ukenummer,Fylkename="Norge",S=SYNDROM)
+  
+  k <<- recordPlot()
+  
+  graphics.off()
+  
+  ## Add to template
+  odfWeave(fhi::DashboardFolder("data_raw",paste("in_default_",SYNDROM,".odt", sep="")),
+           fhi::DashboardFolder("results",paste("Norge_",SYNDROM,"tarm.odt", sep="")))
+  
+  dev.off()
+  
+   
+}
+  
+  Sys.setenv(LD_LIBRARY_PATH="/usr/lib/libreoffice/program")
+  withr::with_dir(fhi::DashboardFolder("results"), system("loffice --headless --convert-to pdf *.odt"))
+  
   cat(sprintf("%s/%s/R/SYKDOMSPULS New monthly pdf are ready",Sys.time(),Sys.getenv("COMPUTER")),"\n")
   return(TRUE)
 }
 
+
+
 DeleteOldDatasets()
-quit(save="no")
+#quit(save="no")
 
 
 
