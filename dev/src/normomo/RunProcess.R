@@ -46,7 +46,7 @@ tryCatch({
   	cat(sprintf("%s/%s/R/NORMOMO Unstable data file",Sys.time(),Sys.getenv("COMPUTER")),"\n")
   } else {
   	cat(sprintf("%s/%s/R/NORMOMO Stable data file",Sys.time(),Sys.getenv("COMPUTER")),"\n")
-  
+
     masterData <- fread(DashboardFolder("data_raw",paste0("FHIDOD2_",f,".txt")))
     masterData[,DoD:=as.Date(as.character(DODS_DATO),format="%Y%m%d")]
     masterData[,DoR:=as.Date(as.character(ENDR_DATO),format="%Y%m%d")]
@@ -162,7 +162,7 @@ tryCatch({
         saveRDS(data,DashboardFolder("data_app","data.RDS"))
       }
       RunTemporaryGraphs(runName=runName,masterData=data,folder=fhi::DashboardFolder("results",file.path(RAWmisc::YearWeek(dateDataMinusOneWeek),"Graphs")), yearWeek=RAWmisc::YearWeek(dateDataMinusOneWeek), dateData=dateData)
-      
+
       RAWmisc::ProgressBarSet(pb,i)
     }
 
@@ -172,7 +172,7 @@ tryCatch({
 
     ## Grid graph
     RunStatusTiles(allResults=allResults,folder=fhi::DashboardFolder("results",file.path(RAWmisc::YearWeek(dateDataMinusOneWeek),"Graphs")), yearWeek=RAWmisc::YearWeek(dateDataMinusOneWeek), dateData=dateData)
-    
+
     ## extracting out raw data for later work
     masterData[,ageCat:=cut(age,c(0,4,14,64,200),include.lowest = TRUE)]
     masterData[,deathWeek:=momo:::isoweek(masterData$DoD, type="week")]
@@ -207,10 +207,10 @@ tryCatch({
     temp[,location:=factor(location,levels=c(VALID_FYLKE,"Norway"))]
     setcolorder(temp,c("deathYear","deathWeek","ageCat","location","N"))
     setorder(temp,deathYear,deathWeek,ageCat,location)
-    
+
     cat(sprintf("%s/%s/R/NORMOMO Saving data_raw.xlsx",Sys.time(),Sys.getenv("COMPUTER")),"\n")
-    openxlsx::write.xlsx(temp,DashboardFolder("results",file.path(RAWmisc::YearWeek(dateDataMinusOneWeek),"Data","data_raw.xlsx"))) 
-  
+    openxlsx::write.xlsx(temp,DashboardFolder("results",file.path(RAWmisc::YearWeek(dateDataMinusOneWeek),"Data","data_raw.xlsx")))
+
     cat(sprintf("%s/%s/R/NORMOMO Zipping results",Sys.time(),Sys.getenv("COMPUTER")),"\n")
     ZipResults(
       folderResults=fhi::DashboardFolder("results"),
@@ -220,13 +220,20 @@ tryCatch({
     )
 
     if(Sys.getenv("COMPUTER")=="smhb"){
-      EmailNotificationOfNewResults()
+      TEST_EMAILS <- FALSE
+    } else {
+      TEST_EMAILS <- TRUE
     }
+    EmailInternal(folderResultsYearWeek=file.path(fhi::DashboardFolder("results",RAWmisc::YearWeek(dateDataMinusOneWeek))),
+                  isTest=TEST_EMAILS)
+    EmailSSI(folderResultsYearWeek=file.path(fhi::DashboardFolder("results",RAWmisc::YearWeek(dateDataMinusOneWeek))),
+             isTest=TEST_EMAILS)
+
   }
 
   cat(sprintf("%s/%s/R/NORMOMO Exited successfully",Sys.time(),Sys.getenv("COMPUTER")),"\n")
   quit(save="no", status=0)
-  
+
 }, warning=function(war) {
   cat("R/NORMOMO","WARN",paste0("UNEXPECTED exit with warning: ",war),"\n")
   quit(save="no", status=1)
