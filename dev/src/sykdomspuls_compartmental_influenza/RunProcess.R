@@ -7,9 +7,10 @@ cat(sprintf("%s/%s/R/sykdomspuls_compartmental_influenza STARTING UP!!",Sys.time
 
 suppressMessages(library(data.table))
 suppressMessages(library(ggplot2))
+suppressMessages(library(optimParallel))
 
 if(Sys.getenv("RSTUDIO") == "1"){
-  devtools::load_all("/packages/dashboards_compartmental_influenza/", export_all=FALSE)
+  devtools::load_all("/git/dashboards_compartmental_influenza/", export_all=FALSE)
 } else {
   library(sykdomspulscompartmentalinfluenza)
 }
@@ -21,132 +22,221 @@ fhi::DashboardInitialise(
   NAME="sykdomspuls_compartmental_influenza"
 )
 
+
+dir.create(fhi::DashboardFolder("results",lubridate::today()))
+#cl <- makeCluster(detectCores()); setDefaultCluster(cl = cl)
+
+
+#if(RAWmisc::IsFileChanged(
+#  fileToCheck=fhi::DashboardFolder("data_raw","resYearLineMunicip_influensa.RDS"),
+#  fileDetails=fhi::DashboardFolder("data_raw","details_resYearLineMunicip_influensa.RDS"))
 d <- readRDS(fhi::DashboardFolder("data_raw","resYearLineMunicip_influensa.RDS"))
+d <- d[age=="Totalt",.(n=sum(n),pop=sum(pop)),by=.(x,week,year,wkyr,county)]
+setnames(d,"county","location")
 d[week>=30,season:=sprintf("%s/%s",year,year+1)]
 d[is.na(season),season:=sprintf("%s/%s",year-1,year)]
+d[week %in% c(25:35),offSeason:=mean(n),by=.(season,location)]
+d[,offSeason:=mean(offSeason,na.rm=T),by=.(season,location)]
+d[,nMinusOffSeason:=floor(n-offSeason)]
+d[nMinusOffSeason<0,nMinusOffSeason:=0]
 
 seasons <- unique(d$season)[-1]
+s=seasons[3]
 
-dirTmp <- "/tmp/sykdomspuls_compartmental_influenza"
-dirSrc <- system.file("src", package = "sykdomspulscompartmentalinfluenza")
-dirData <- system.file("extdata", package = "sykdomspulscompartmentalinfluenza")
+regions <- SetupCPPAndStructure()
 
-unlink(dirTmp, recursive = TRUE, force = TRUE)
-dir.create(dirTmp)
+a <- Sys.time()
+res <- RunSim(
+  param=c(0.5,0.6,0.7,0.8,0.9),
+  regions=regions,
+  betaFlat=0.2,
+  betaDecreaseSpeed=0.005,
+  doctorVisitingProb=0.3,
+  d=d,
+  s=s,
+  startWeek=40)
+b <- Sys.time()
+b-a
 
-file.copy(file.path(dirSrc,list.files(dirSrc)), dirTmp)
-file.copy(file.path(dirData,list.files(dirData,pattern="xlsx")), dirTmp)
+(a <- OptimFunction(c(0.2,0.007,rep(0.52,5)),
+             regions=regions,
+             d=d,
+             s=s,
+             startWeek=30))
 
-pop_wo_com <- data.table(readxl::read_excel(file.path(dirTmp,sprintf("%s.xlsx","pop_wo_com"))))
-di_edge_list <- data.table(readxl::read_excel(file.path(dirTmp,sprintf("%s.xlsx","di_edge_list"))))
+OptimizeSeason <- function(regions,doctorVisitingProb=0.3,d,s,startWeek=30){
+  p <- optimParallel(par=c(0.2,0.007,rep(0.52,5)),
+             fn=OptimFunction,
+             regions=regions,
+             d=d,
+             s=s,
+             startWeek=startWeek,
+             method="L-BFGS-B",
+             lower=c(0.05,0.001,rep(0.4,5)),
+             upper=c(0.3,0.015,rep(0.7,5)),
+              control=list(
+                trace=6,
+                maxit=5
+              ))
+  return(p$par)
+}
+cl <- makeCluster(detectCores()); setDefaultCluster(cl = cl)
+b <- OptimizeSeason(regions=regions,doctorVisitingProb=0.3,d=d,s=s,startWeek=40)
 
-loc <- pop_wo_com[,c("kommuneNameOld","location")]
-setnames(loc,"kommuneNameOld","from")
-loc[,from:=factor(from,levels=from)]
+#0850
 
-nrow(di_edge_list)
-di_edge_list <- merge(di_edge_list,loc,by="from")
-nrow(di_edge_list)
-di_edge_list[,from:=NULL]
-setnames(di_edge_list,"location","from")
 
-setnames(loc,"from","to")
-nrow(di_edge_list)
-di_edge_list <- merge(di_edge_list,loc,by="to")
-nrow(di_edge_list)
-di_edge_list[,to:=NULL]
-setnames(di_edge_list,"location","to")
-setcolorder(di_edge_list,c("from","to","n"))
-setorder(di_edge_list,from,to)
 
-pop_wo_com[,kommuneNameOld:=NULL]
-setcolorder(pop_wo_com,c("location","pop"))
-
-di_edge_list <- di_edge_list[from %in% unique(d$location) & to %in% unique(d$location)]
-pop_wo_com <- pop_wo_com[location %in% unique(d$location)]
-d <- d[location %in% pop_wo_com$location]
-
-for(i in c("di_edge_list","pop_wo_com")){
-  fwrite(get(i),
-         file=file.path(dirTmp,sprintf("%s.txt",i)),
-         sep=" ",
-         col.names=F)
+CalcR0 <- function(beta){
+  r0 <- (beta*CONFIG_PAR$gamma) * (0.5 * 0.33 + 0.67)
+  return(r0)
 }
 
-res <- withr::with_dir(dirTmp,{
-  processx::run(
-    command="g++",
-    args=c("-std=c++11","-oinfl_kommuner.exe","infl_kommuner.cpp"),echo=T)
-})
-
-
-s = seasons[1]
-doctorVisitingProb <- 0.3
-startWeek <- 40
-startX <- d[season==s & week==startWeek & age=="Totalt"]$x[1]
-
-fwrite(data.frame(floor(d[season==s & week==startWeek & age=="Totalt"]$n*doctorVisitingProb)),
-       file=file.path(dirTmp,"start_infected.txt"),
-       sep=" ",
-       col.names=F)
-
-RunSim <- function(param=0.6){
-  res <- withr::with_dir(dirTmp,{
-    processx::run(
-      command=file.path(dirTmp,"infl_kommuner.exe"),
-      args=c(as.character(param),"3","1.9"))
-  })
+skeleton <- data.frame(season=NA,beta=NA,shiftX)
+retval <- vector("list",length=length(seasons))
+retval <- vector("list",length=2)
+pb <- RAWmisc::ProgressBarCreate(min=1,max=length(retval))
+for(i in 1:length(retval)){
+  RAWmisc::ProgressBarSet(pb,i)
+  skeleton$season <- seasons[i]
+  temp <- OptimizeSeason(d=d,s=seasons[i])
+  skeleton$beta <- temp[1]
+  skeleton$shiftX <- temp[2]
   
-  list.files(dirTmp)
-  
-  loc <- fread(file.path(dirTmp,"pop_wo_com.txt"))
-  setnames(loc,c("location","pop"))
-  loc[,kn:=1:.N-1]
-  
-  m <- fread(file.path(dirTmp,"cpp_res_series.txt"))
-  setnames(m,c("kn","S","E","SI","AI","R"))
-  m <- m[seq(1,nrow(d),2)]
-  m[,day:=1:.N,by=kn]
-  
-  m <- merge(m,loc,by="kn")
-  m[,x:=floor(day/7)+startX]
-  m <- m[,.(
-    S=mean(S),
-    E=mean(E),
-    SI=mean(SI),
-    AI=mean(AI),
-    R=mean(R)),
-    by=.(
-      location,x
-    )]
-  
-  res <- merge(d[season==s & age=="Totalt",],m,by=c("location","x"))
-  
-  return(res)
+  retval[[i]] <- skeleton
 }
 
-OptimFunction <- function(param=0.6){
-  res <- RunSim(param=param)
-  res[,error:=n-SI*doctorVisitingProb]
-  
-  totalError <- mean(res$error^2)
+retval <- rbindlist(retval)
+retval[,R0:=CalcR0(beta)]
 
-  return(totalError)
+sims <- vector("list",length=nrow(retval))
+sims <- vector("list",length=2)
+pb <- RAWmisc::ProgressBarCreate(min=1,max=length(sims))
+for(i in 1:length(sims)){
+  RAWmisc::ProgressBarSet(pb,i)
+  
+  temp <- RunSim(
+    retval$beta[i],
+    d=d,
+    s=retval$season[i],
+    startWeek=30,
+    shiftX=retval$shiftX,
+    doctorVisitingProb=0.3)
+  
+  nat <- temp[,.(
+  n=sum(nMinusOffSeason),
+  S=sum(S),
+  E=sum(E),
+  SI=sum(SI),
+  AI=sum(AI),
+  R=sum(R),
+  INCIDENCE=sum(INCIDENCE)
+  ),by=.(x,wkyr,week,season)]
+  
+  sims[[i]] <- nat
 }
 
-p <- optim(0.6, OptimFunction, method="L-BFGS-B", lower=0.4, upper=1,
-  control=list(
-    trace=3,
-    maxit=30
-))
+sims <- rbindlist(sims)
 
-sim <- RunSim(param=p$par)
+for(s in unique(sims$season)){
+  q <- ggplot(sims[season==s], aes(x=x))
+  q <- q + geom_point(mapping=aes(y=n))
+  q <- q + geom_line(mapping=aes(y=SI*doctorVisitingProb),col="red")
+  q <- q + geom_line(mapping=aes(y=SI),col="orange")
+  q <- q + facet_wrap(~season)
+  
+  RAWmisc::saveA4(q,
+                  filename=fhi::DashboardFolder("results",
+                                                sprintf("%s/%s.png",
+                                                        lubridate::today(),
+                                                        stringr::str_replace(s,"/","-"))))
+}
 
-q <- ggplot(sim[location=="municip0301"], aes(x=x))
-q <- q + geom_point(mapping=aes(y=n))
-q <- q + geom_line(mapping=aes(y=SI*doctorVisitingProb),col="red")
-q <- q + geom_line(mapping=aes(y=SI),col="orange")
-q
 
 
 quit(save="no")
+
+d <- readRDS(fhi::DashboardFolder("data_raw","resYearLineMunicip_influensa.RDS"))[age=="Totalt"]
+d[week>=30,season:=sprintf("%s/%s",year,year+1)]
+d[is.na(season),season:=sprintf("%s/%s",year-1,year)]
+d[week %in% c(20:40),offSeason:=mean(n),by=.(season,location)]
+d[,offSeason:=mean(offSeason,na.rm=T),by=.(season,location)]
+d[,n:=floor(n-offSeason)]
+d[n<0,n:=0]
+
+seasons <- unique(d$season)[-1]
+
+SetupCPPAndStructure()
+
+for(s in seasons[2]){
+  print(s)
+  temp <- RunSim(
+      0.74,
+      d=d,
+      s=s,
+      startWeek=30,
+      doctorVisitingProb=0.3)
+  nat <- temp[!is.na(S),.(
+    n=sum(n),
+    S=sum(S),
+    E=sum(E),
+    SI=sum(SI),
+    AI=sum(AI),
+    R=sum(R),
+    INCIDENCE=sum(INCIDENCE)
+    ),by=.(x,wkyr,week,season)]
+  
+  q <- ggplot(nat, aes(x=x))
+  q <- q + geom_point(mapping=aes(y=0.75*n))
+  q <- q + geom_line(mapping=aes(y=SI*doctorVisitingProb),col="red")
+  q <- q + geom_line(mapping=aes(y=SI),col="orange")
+    RAWmisc::saveA4(q,
+                  filename=fhi::DashboardFolder("results",
+                                                sprintf("%s/%s.png",
+                                                        lubridate::today(),
+                                                        stringr::str_replace(s,"/","-"))))
+}
+
+s=seasons[4]
+SetupCPPAndStructure()
+b <- OptimizeSeason(regions=regions,doctorVisitingProb=0.3,d=d,s=s)
+
+x <- b-0.01
+x[3] <- x[3]-0.07
+x[4] <- x[4]-0.035
+x[5] <- x[5]-0.01
+x <- b
+
+SetupCPPAndStructure()
+
+x <- c(0.2,0.007,rep(0.52,5))
+x <- b
+temp <- RunSim(
+      param=x[3:7],
+      regions=regions,
+      betaFlat=x[1],
+      betaDecreaseSpeed=x[2],
+      doctorVisitingProb=0.2,
+      d=d,
+      s=s,
+      startWeek=40)
+
+nat <- temp[!is.na(S),.(
+  pop=mean(pop),
+  n=sum(n),
+  S=sum(S),
+  E=sum(E),
+  SI=sum(SI),
+  AI=sum(AI),
+  R=sum(R),
+  INCIDENCE=sum(INCIDENCE),
+  doc_INCIDENCE=sum(doc_INCIDENCE)
+  ),by=.(x,wkyr,week,season,region)]
+
+q <- ggplot(nat, aes(x=x))
+q <- q + geom_point(mapping=aes(y=(n/pop*100000)))
+q <- q + geom_line(mapping=aes(y=(doc_INCIDENCE/pop*100000)),col="red")
+q <- q + facet_grid(~region)
+#q <- q + geom_line(mapping=aes(y=SI),col="orange")
+q
+
