@@ -1,8 +1,7 @@
 ---
 title: "Sykdomspulsen"
-output: 
-  flexdashboard::flex_dashboard:
-    orientation: rows
+output: flexdashboard::flex_dashboard:
+orientation: rows
 runtime: shiny
 ---
 
