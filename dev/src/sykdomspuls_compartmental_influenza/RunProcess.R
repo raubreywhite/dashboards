@@ -26,54 +26,51 @@ fhi::DashboardInitialise(
 dir.create(fhi::DashboardFolder("results",lubridate::today()))
 #cl <- makeCluster(detectCores()); setDefaultCluster(cl = cl)
 
-
-#if(RAWmisc::IsFileChanged(
-#  fileToCheck=fhi::DashboardFolder("data_raw","resYearLineMunicip_influensa.RDS"),
-#  fileDetails=fhi::DashboardFolder("data_raw","details_resYearLineMunicip_influensa.RDS"))
-d <- readRDS(fhi::DashboardFolder("data_raw","resYearLineMunicip_influensa.RDS"))
-d <- d[age=="Totalt",.(n=sum(n),pop=sum(pop)),by=.(x,week,year,wkyr,county)]
-setnames(d,"county","location")
-d[week>=30,season:=sprintf("%s/%s",year,year+1)]
-d[is.na(season),season:=sprintf("%s/%s",year-1,year)]
-d[week %in% c(25:35),offSeason:=mean(n),by=.(season,location)]
-d[,offSeason:=mean(offSeason,na.rm=T),by=.(season,location)]
-d[,nMinusOffSeason:=floor(n-offSeason)]
-d[nMinusOffSeason<0,nMinusOffSeason:=0]
+x <- SetupCPPAndStructure()
+regions <- x[["regions"]]
+d <- x[["d"]]
 
 seasons <- unique(d$season)[-1]
 s=seasons[3]
-
-regions <- SetupCPPAndStructure()
 
 a <- Sys.time()
 res <- RunSim(
   param=c(0.5,0.6,0.7,0.8,0.9),
   regions=regions,
-  betaFlat=0.2,
-  betaDecreaseSpeed=0.005,
+  betaShape=5,
+  betaScale=40,
   doctorVisitingProb=0.3,
   d=d,
   s=s,
-  startWeek=40)
+  startWeek=30,
+  verbose=F)
 b <- Sys.time()
 b-a
 
-(a <- OptimFunction(c(0.2,0.007,rep(0.52,5)),
+a <- Sys.time()
+(x <- OptimFunction(c(0.5,0.40,0.5),
              regions=regions,
              d=d,
              s=s,
              startWeek=30))
+b <- Sys.time()
+b-a
 
-OptimizeSeason <- function(regions,doctorVisitingProb=0.3,d,s,startWeek=30){
-  p <- optimParallel(par=c(0.2,0.007,rep(0.52,5)),
+OptimizeSeason <- function(regions,doctorVisitingProb=0.3,d,s,startWeek=30,parallel=F){
+  if(parallel){
+    useFunction = optimParallel
+  } else {
+    useFunction = optim
+  }
+  p <- useFunction(par=c(0.5,0.4,0.52),
              fn=OptimFunction,
              regions=regions,
              d=d,
              s=s,
              startWeek=startWeek,
              method="L-BFGS-B",
-             lower=c(0.05,0.001,rep(0.4,5)),
-             upper=c(0.3,0.015,rep(0.7,5)),
+             lower=c(0.1,0.1,0.4),
+             upper=c(1,1,0.7),
               control=list(
                 trace=6,
                 maxit=5
@@ -81,7 +78,8 @@ OptimizeSeason <- function(regions,doctorVisitingProb=0.3,d,s,startWeek=30){
   return(p$par)
 }
 cl <- makeCluster(detectCores()); setDefaultCluster(cl = cl)
-b <- OptimizeSeason(regions=regions,doctorVisitingProb=0.3,d=d,s=s,startWeek=40)
+b <- OptimizeSeason(regions=regions,doctorVisitingProb=0.3,d=d,s=s,startWeek=40,parallel=F)
+b <- OptimizeSeason(regions=regions,doctorVisitingProb=0.3,d=d,s=s,startWeek=40,parallel=T)
 
 #0850
 
@@ -209,17 +207,16 @@ x <- b
 
 SetupCPPAndStructure()
 
-x <- c(0.2,0.007,rep(0.52,5))
-x <- b
 temp <- RunSim(
-      param=x[3:7],
+      param=rep(0.2,5),
       regions=regions,
-      betaFlat=x[1],
-      betaDecreaseSpeed=x[2],
+      betaShape=1000,
+      betaScale=60,
       doctorVisitingProb=0.2,
       d=d,
       s=s,
-      startWeek=40)
+      startWeek=30,
+      verbose=T)
 
 nat <- temp[!is.na(S),.(
   pop=mean(pop),
@@ -231,12 +228,44 @@ nat <- temp[!is.na(S),.(
   R=sum(R),
   INCIDENCE=sum(INCIDENCE),
   doc_INCIDENCE=sum(doc_INCIDENCE)
-  ),by=.(x,wkyr,week,season,region)]
+  ),by=.(x,wkyr,week,season,age,region)]
 
-q <- ggplot(nat, aes(x=x))
+q <- ggplot(nat[x>10], aes(x=x))
 q <- q + geom_point(mapping=aes(y=(n/pop*100000)))
 q <- q + geom_line(mapping=aes(y=(doc_INCIDENCE/pop*100000)),col="red")
+q <- q + facet_grid(age~region,scales="free")
+#q <- q + geom_line(mapping=aes(y=SI),col="orange")
+q
+
+q <- ggplot(nat, aes(x=x))
+q <- q + geom_point(mapping=aes(y=log(n)))
+q <- q + stat_smooth(mapping=aes(y=log(n)),col="red")
+#q <- q + geom_line(mapping=aes(y=(doc_INCIDENCE)),col="red")
 q <- q + facet_grid(~region)
+#q <- q + geom_line(mapping=aes(y=SI),col="orange")
+q
+
+
+d <- readRDS(fhi::DashboardFolder("data_raw","resYearLineMunicip_influensa.RDS"))
+d[,location:=NULL]
+d[,pop:=NULL]
+setnames(d,"county","location")
+d <- merge(d,regions,by="location")
+d <- merge(d,pop,by=c("age","location"))
+d <- d[,.(n=sum(n),pop=sum(pop)),by=.(x,week,year,wkyr,region,age)]
+setnames(d,"region","location")
+d[week>=30,season:=sprintf("%s/%s",year,year+1)]
+d[is.na(season),season:=sprintf("%s/%s",year-1,year)]
+d[week %in% c(25:35),offSeason:=mean(n),by=.(season,location)]
+d[,offSeason:=mean(offSeason,na.rm=T),by=.(season,location)]
+d[,nMinusOffSeason:=floor(n-offSeason)]
+d[nMinusOffSeason<0,nMinusOffSeason:=0]
+
+q <- ggplot(d[season==s], aes(x=x))
+q <- q + geom_point(mapping=aes(y=(n/pop*10000)))
+#q <- q + stat_smooth(mapping=aes(y=log(n)),col="red")
+#q <- q + geom_line(mapping=aes(y=(doc_INCIDENCE)),col="red")
+q <- q + facet_grid(age~location)
 #q <- q + geom_line(mapping=aes(y=SI),col="orange")
 q
 
