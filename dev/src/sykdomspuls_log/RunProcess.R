@@ -42,11 +42,11 @@ if(length(files)<2) quit(save="no")
 
 d <- vector("list",length=length(files))
 for(i in 2:length(files)){
-  
+
   normalFunction <- function(){
     return(fread(fhi::DashboardFolder("data_raw",files[i]),header=FALSE,sep=' '))
   }
-  
+
   exceptionFunction <- function(err){
     newFile <- tempfile()
     con = file(fhi::DashboardFolder("data_raw",files[i]), "r")
@@ -56,6 +56,10 @@ for(i in 2:length(files)){
       if ( length(line) == 0 ) {
         break
       }
+      # if no arguments are provided, put them in
+      line <- stringr::str_replace(line,"-  $","- NOARGS ")
+
+      # save file
       cat(line,"\n",file=newFile, append=TRUE)
     }
     close(con)
@@ -80,7 +84,7 @@ previousIPs <- c()
 if(file.exists(fhi::DashboardFolder("data_clean","ips.RDS"))){
   previousLocations <- readRDS(file=fhi::DashboardFolder("data_clean","ips.RDS"))
   previousIPs <- previousLocations$ipForwarded
-  
+
   ips <- ips[!ips %in% previousIPs]
 }
 
@@ -138,8 +142,8 @@ arg[,xtype:=stringr::str_replace(xtype,"xtype=","")]
 
 people <- unique(d[,c("ipForwarded","region_name","yrwk")])
 peopleTotal <- unique(d[,c("ipForwarded","region_name")])
-peopleTotal <- peopleTotal[,.(uniqueIPs=.N),by=.(region_name)] 
-people <- people[,.(uniqueIPs=.N),by=.(region_name,yrwk)] 
+peopleTotal <- peopleTotal[,.(uniqueIPs=.N),by=.(region_name)]
+people <- people[,.(uniqueIPs=.N),by=.(region_name,yrwk)]
 q <- ggplot(people,aes(x=yrwk,y=uniqueIPs,fill=region_name))
 q <- q + geom_bar(stat="identity",colour="black",alpha=0.75)
 q <- q + scale_fill_manual(values=Colours(length(unique(peopleTotal$region_name))))
