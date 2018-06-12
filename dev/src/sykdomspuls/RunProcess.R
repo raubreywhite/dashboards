@@ -192,7 +192,7 @@ if(!UpdateData()){
           error=exceptionalFunction
           )
 
-        if(i==4) retval[, county := GetCountyFromMunicip(analysisIter$stack$location, norwayLocations=norwayLocations)]
+        #if(i==4) retval[, county := GetCountyFromMunicip(analysisIter$stack$location, norwayLocations=norwayLocations)]
         retval
       }
       assign("progressIndex", progressIndex + nrow(stack), envir = .GlobalEnv)
