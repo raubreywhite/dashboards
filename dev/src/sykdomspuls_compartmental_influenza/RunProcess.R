@@ -100,7 +100,7 @@ for(i in 1:length(retval)){
   temp <- OptimizeSeason(d=d,s=seasons[i])
   skeleton$beta <- temp[1]
   skeleton$shiftX <- temp[2]
-  
+
   retval[[i]] <- skeleton
 }
 
@@ -112,7 +112,7 @@ sims <- vector("list",length=2)
 pb <- RAWmisc::ProgressBarCreate(min=1,max=length(sims))
 for(i in 1:length(sims)){
   RAWmisc::ProgressBarSet(pb,i)
-  
+
   temp <- RunSim(
     retval$beta[i],
     d=d,
@@ -120,7 +120,7 @@ for(i in 1:length(sims)){
     startWeek=30,
     shiftX=retval$shiftX,
     doctorVisitingProb=0.3)
-  
+
   nat <- temp[,.(
   n=sum(nMinusOffSeason),
   S=sum(S),
@@ -130,7 +130,7 @@ for(i in 1:length(sims)){
   R=sum(R),
   INCIDENCE=sum(INCIDENCE)
   ),by=.(x,wkyr,week,season)]
-  
+
   sims[[i]] <- nat
 }
 
@@ -142,7 +142,7 @@ for(s in unique(sims$season)){
   q <- q + geom_line(mapping=aes(y=SI*doctorVisitingProb),col="red")
   q <- q + geom_line(mapping=aes(y=SI),col="orange")
   q <- q + facet_wrap(~season)
-  
+
   RAWmisc::saveA4(q,
                   filename=fhi::DashboardFolder("results",
                                                 sprintf("%s/%s.png",
@@ -183,7 +183,7 @@ for(s in seasons[2]){
     R=sum(R),
     INCIDENCE=sum(INCIDENCE)
     ),by=.(x,wkyr,week,season)]
-  
+
   q <- ggplot(nat, aes(x=x))
   q <- q + geom_point(mapping=aes(y=0.75*n))
   q <- q + geom_line(mapping=aes(y=SI*doctorVisitingProb),col="red")
@@ -195,7 +195,7 @@ for(s in seasons[2]){
                                                         stringr::str_replace(s,"/","-"))))
 }
 
-s=seasons[4]
+s=seasons[2]
 SetupCPPAndStructure()
 b <- OptimizeSeason(regions=regions,doctorVisitingProb=0.3,d=d,s=s)
 
@@ -208,10 +208,8 @@ x <- b
 SetupCPPAndStructure()
 
 temp <- RunSim(
-      param=rep(0.2,5),
+      param=rep(0.4,5),
       regions=regions,
-      betaShape=1000,
-      betaScale=60,
       doctorVisitingProb=0.2,
       d=d,
       s=s,
@@ -230,7 +228,7 @@ nat <- temp[!is.na(S),.(
   doc_INCIDENCE=sum(doc_INCIDENCE)
   ),by=.(x,wkyr,week,season,age,region)]
 
-q <- ggplot(nat[x>10], aes(x=x))
+q <- ggplot(nat[x>1], aes(x=x))
 q <- q + geom_point(mapping=aes(y=(n/pop*100000)))
 q <- q + geom_line(mapping=aes(y=(doc_INCIDENCE/pop*100000)),col="red")
 q <- q + facet_grid(age~region,scales="free")
@@ -269,3 +267,82 @@ q <- q + facet_grid(age~location)
 #q <- q + geom_line(mapping=aes(y=SI),col="orange")
 q
 
+
+
+RepeatDataTable <- function(d, xxxn) {
+  if ("data.table" %in% class(d)) return(d[rep(seq_len(nrow(d)), xxxn)])
+  return(d[rep(seq_len(nrow(d)), xxxn), ])
+}
+
+#####
+
+regions <- x[["regions"]]
+d <- x[["d"]]
+d <- d[season=="2006/2007"]
+d <- RepeatDataTable(d,7)
+d[,nDaily:=floor(n/7)]
+setorder(d,location,age,wkyr)
+d[,day:=1:.N,by=.(location,age)]
+d[,date:=as.Date("2017-06-01")+day]
+
+mu <- 2 # mean in days days
+sigma <- 3 # standard deviation in days
+
+library(earlyR)
+
+new_i <- incidence::as.incidence(d[location=="county03" & age=="65+"]$nDaily*3+3, d[location=="county03" & age=="65+"]$date)
+new_i
+
+plot(new_i)
+
+library(distcrete)
+library(epitrix)
+mu <- 3
+sigma <- 5
+cv <- sigma / mu
+params <- gamma_mucv2shapescale(mu, cv)
+params
+
+si <- distcrete("gamma", shape = params$shape,
+                scale = params$scale,
+                interval = 1, w = 0)
+si
+
+library(projections)
+set.seed(1)
+proj_1 <- project(x = new_i[1:100], R = 1.4, si = si, n_days = 60)
+
+## adding them to incidence plot
+proj <- project(x = new_i[1:100], R = 2.0, si = si, n_days = 100,
+                  R_fix_within = TRUE)
+proj <- as.data.frame(proj)
+setDT(proj)
+proj <- melt.data.table(proj,id.vars="dates")
+proj <- proj[,.(est=mean(value)),by=.(dates)]
+
+toPlot <- merge(d[location=="county03" & age=="65+"],proj,by.x="date",by.y="dates",all.x=T)
+
+q <- ggplot(toPlot,mapping=aes(x=date))
+q <- q + geom_bar(stat="identity",mapping=aes(y=nDaily))
+q <- q + geom_line(mapping=aes(y=est/3))
+q
+
+apply(proj[,-1],1,mean)
+
+## adding them to incidence plot
+projections::plot(new_i[1:260], proj = proj_3)
+plot(new_i[1:260])
+
+res <- get_R(new_i, si_mean = mu, si_sd = sigma)
+res
+plot(res)
+
+R_val <- sample_R(res, 1000)
+summary(R_val) # basic stats
+
+plot(res, "lambdas", scale = length(onset) + 1)
+points(d[location=="county03" & age=="65+"]$nDaily)
+
+abline(v = onset, lwd = 3, col = "grey")
+abline(v = today, col = "blue", lty = 2, lwd = 2)
+points(onset, seq_along(onset), pch = 20, cex = 3)

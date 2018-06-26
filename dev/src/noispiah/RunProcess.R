@@ -24,12 +24,18 @@ fhi::DashboardInitialise(
 
 CheckData()
 
-CONFIG$FILES_RMD_USE_RAPPORT
-CONFIG$FORCE_TESTING
+(FILES_RMD_USE_SYKEHJEM <- CONFIG$FILES_RMD_USE_SYKEHJEM)
+(FILES_RMD_USE_SYKEHUS <- CONFIG$FILES_RMD_USE_SYKEHUS)
+(dev<-CONFIG$FORCE_TESTING)
 
-Render(dev=CONFIG$FORCE_TESTING)
+Render(dev=dev,
+       FILES_RMD_USE_SYKEHJEM=FILES_RMD_USE_SYKEHJEM,
+       FILES_RMD_USE_SYKEHUS=FILES_RMD_USE_SYKEHUS)
 
 file.create(DashboardFolder("data_raw","DONE.txt"))
 
 
 quit(save="no")
+
+#"Møre og Romsdal - Fræna"
+#"Møre og Romsdal - Haram"
