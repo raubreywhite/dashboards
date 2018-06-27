@@ -37,5 +37,5 @@ file.create(DashboardFolder("data_raw","DONE.txt"))
 
 quit(save="no")
 
-#"Møre og Romsdal - Fræna"
+#"Møre og Romsdal - Fræna" -
 #"Møre og Romsdal - Haram"
