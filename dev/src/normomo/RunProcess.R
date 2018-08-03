@@ -120,7 +120,7 @@ tryCatch({
         WDIR = DashboardFolder("results",file.path(RAWmisc::YearWeek(dateDataMinusOneWeek),"MOMO")),
         back = 7,
         WWW = 290,
-        Ysum = 2016,
+        Ysum = lubridate::year(dateDataMinusOneWeek),
         Wsum = 40,
         plotGraphs = plotGraphs,
         MOMOgroups = MOMOgroups,
@@ -133,7 +133,7 @@ tryCatch({
 
       allResults[[i+1]] <- data
       allResults[[i+1]][,name:=runName]
-      data <- data[,c("GROUP","wk","wk2","YoDi","WoDi","Pnb","nbc","UPIb2","UPIb4","UPIc","LPIc","UCIc","zscore"),with=F]
+      data <- data[,c("GROUP","wk","wk2","YoDi","WoDi","Pnb","nb","nbc","UPIb2","UPIb4","UPIc","LPIc","UCIc","LCIc","zscore"),with=F]
       data[,id:=paste0(GROUP,wk,wk2)]
 
       if(runName=="Norway"){
@@ -146,8 +146,9 @@ tryCatch({
         data[is.na(randomNoise),randomNoise:=as.numeric(sample(c(-3:3),size=.N,replace=TRUE))]
         saveRDS(data,DashboardFolder("results","censoring.RDS"))
         data[,nbc:=fhi::Censor(n=nbc,randomNoise=randomNoise,boundaries=list(data$UPIb2,data$UPIb4))]
+        data[,nb:=fhi::Censor(n=nb,randomNoise=randomNoise,boundaries=list(data$UPIb2,data$UPIb4))]
       }
-      minCorrectedWeek <- min(data[!is.na(UCIc)]$wk)
+      minCorrectedWeek <- min(data[!is.na(UPIc)]$wk)
       data[is.na(UPIc) | UPIc < nbc,UPIc:=nbc]
       data[is.na(LPIc) | LPIc > nbc,LPIc:=nbc]
       data[wk >= minCorrectedWeek & UPIc==0,UPIc:=1]
