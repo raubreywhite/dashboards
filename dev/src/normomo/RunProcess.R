@@ -10,8 +10,10 @@ suppressMessages(library(ggplot2))
 
 if(Sys.getenv("RSTUDIO") == "1"){
   devtools::load_all("/packages/dashboards_normomo/", export_all=FALSE)
+  forceRun <- TRUE
 } else {
   library(normomo)
+  forceRun <- FALSE
 }
 
 DashboardFolder <- fhi::DashboardFolder
@@ -21,229 +23,137 @@ fhi::DashboardInitialise(
   NAME="normomo"
 )
 
-VALID_FYLKE <- c(1:12,14:15,50,18:20)
+info <- GetDataInfo()
 
-tryCatch({
-  # Your code starts here
+masterData <- GetData(
+  fClean=info[["fClean"]],
+  f=info[["f"]],
+  forceRun=forceRun
+  )
 
-  f <- list.files(DashboardFolder("data_clean"),"data_")
-  f <- gsub("data_","",f)
-  f <- gsub(".RDS$","",f)
-  if(length(f)>0){
-    fClean <- max(f)
-  } else fClean <- ""
+SetupFolders(dateDataMinusOneWeek=info[["dateDataMinusOneWeek"]])
 
-  f <- list.files(DashboardFolder("data_raw"),"FHIDOD2")
-  f <- gsub("FHIDOD2_","",f)
-  f <- gsub(".txt$","",f)
-  f <- max(f)
-  dateData <- as.Date(f,format="%Y%m%d")
-  dateDataMinusOneWeek <- dateData - 7
+stack <- GenerateStack(
+  f=info[["f"]],
+  dateDataMinusOneWeek=info[["dateDataMinusOneWeek"]],
+  dateData=info[["dateData"]]
+  )
 
-  if(fClean==f){
-  	cat(sprintf("%s/%s/R/NORMOMO No new data",Sys.time(),Sys.getenv("COMPUTER")),"\n")
-  } else if(!RAWmisc::IsFileStable(DashboardFolder("data_raw",paste0("FHIDOD2_",f,".txt")))){
-  	cat(sprintf("%s/%s/R/NORMOMO Unstable data file",Sys.time(),Sys.getenv("COMPUTER")),"\n")
+pb <- RAWmisc::ProgressBarCreate(min=0,max=nrow(stack),flush=TRUE)
+allResults <- vector("list",100)
+
+hfile <- data.frame(readxl::read_excel(system.file("extdata", "bank_holidays.xlsx", package = "normomo"))[,c("date", "closed")])
+hfile$date <- as.Date(hfile$date)
+fwrite(hfile,file=DashboardFolder("data_clean","bank_holidays.txt"))
+
+
+for(i in 1:nrow(stack)){
+  s <- stack[i,]
+
+  if(s[["runName"]]=="Norway"){
+    dataAnalysis <- as.data.frame(masterData[!is.na(age),c("DoD","DoR","age"),with=F])
+    plotGraphs <- TRUE
   } else {
-  	cat(sprintf("%s/%s/R/NORMOMO Stable data file",Sys.time(),Sys.getenv("COMPUTER")),"\n")
+    dataAnalysis <- as.data.frame(masterData[!is.na(age) & FYLKE==s[["fylke"]],c("DoD","DoR","age"),with=F])
+    plotGraphs <- FALSE
+  }
+  saveRDS(dataAnalysis,file=s[["data_clean_name"]])
+  saveRDS(dataAnalysis,file=DashboardFolder("data_clean","data.RDS"))
+  fwrite(dataAnalysis,file=DashboardFolder("data_clean","data.txt"))
 
-    masterData <- fread(DashboardFolder("data_raw",paste0("FHIDOD2_",f,".txt")))
-    masterData[,DoD:=as.Date(as.character(DODS_DATO),format="%Y%m%d")]
-    masterData[,DoR:=as.Date(as.character(ENDR_DATO),format="%Y%m%d")]
-    masterData[,DoB:=as.Date(as.character(FDATO_YYYYMMDD),format="%Y%m%d")]
-    masterData[,age:=floor(as.numeric(difftime(DoD,DoB,units="days"))/365.25)]
-    masterData[is.na(DoR),DoR:=DoD+1]
-    masterData[DoR>="2015-09-03",DoR:=DoR+1]
-    masterData[FYLKE %in% c(16,17),FYLKE:=50] # recoding south and north tronderlag to tronderlag
+  momo::SetOpts(
+    DoA = s[["dateData"]],
+    DoPR = as.Date("2012-1-1"),
+    WStart = 1,
+    WEnd = 52,
+    country = s[["runName"]],
+    source = "FHI",
+    MFILE = "data.txt",
+    HFILE = "bank_holidays.txt",
+    INPUTDIR = s[["MOMOFolderInput"]],
+    WDIR = s[["MOMOFolderResults"]],
+    back = 7,
+    WWW = 290,
+    Ysum = s[["MOMOYsum"]],
+    Wsum = 40,
+    plotGraphs = s[["plotGraphs"]],
+    MOMOgroups = s[["MOMOgroups"]][[1]],
+    MOMOmodels = s[["MOMOmodels"]][[1]],
+    verbose=FALSE)
 
-    unlink(DashboardFolder("results",RAWmisc::YearWeek(dateDataMinusOneWeek)),recursive=TRUE,force=TRUE)
-    dir.create(DashboardFolder("results",RAWmisc::YearWeek(dateDataMinusOneWeek)))
-    dir.create(DashboardFolder("results",file.path(RAWmisc::YearWeek(dateDataMinusOneWeek),"Graphs")))
-    dir.create(DashboardFolder("results",file.path(RAWmisc::YearWeek(dateDataMinusOneWeek),"MOMO")))
-    dir.create(DashboardFolder("results",file.path(RAWmisc::YearWeek(dateDataMinusOneWeek),"Data")))
+  momo::RunMoMo()
 
-    allResults <- vector("list",100)
-    pb <- RAWmisc::ProgressBarCreate(min=0,max=20,flush=TRUE)
-    for(i in c(VALID_FYLKE,0)){
-      if(i==0){
-        dataAnalysis <- as.data.frame(masterData[!is.na(age),c("DoD","DoR","age"),with=F])
-        saveRDS(dataAnalysis,file=DashboardFolder("data_clean",paste0("data_",f,".RDS")))
-        runName <- "Norway"
-      } else {
-        dataAnalysis <- as.data.frame(masterData[!is.na(age) & FYLKE==i,c("DoD","DoR","age"),with=F])
-        saveRDS(dataAnalysis,file=DashboardFolder("data_clean",sprintf("fylke_%s_%s.RDS",i,f)))
-        runName <- sprintf("Fylke_%s",formatC(i,width=2,flag=0))
-      }
-      saveRDS(dataAnalysis,file=DashboardFolder("data_clean","data.RDS"))
-      fwrite(dataAnalysis,file=DashboardFolder("data_clean","data.txt"))
+  data <- rbindlist(momo::dataExport$toSave, fill=TRUE)
 
-      hfile <- data.frame(readxl::read_excel(system.file("extdata", "bank_holidays.xlsx", package = "normomo"))[,c("date", "closed")])
-      hfile$date <- as.Date(hfile$date)
-      fwrite(hfile,file=DashboardFolder("data_clean","bank_holidays.txt"))
+  allResults[[i]] <- data
+  allResults[[i]][,name:=s[["runName"]]]
 
-      if(runName=="Norway"){
-        plotGraphs <- TRUE
-        MOMOgroups <- list(
-          "0to4" =  "age >= 0 & age <=4",
-          "5to14" = "age >= 5 & age <=14",
-          "15to64" = "age >= 15 & age <=64",
-          "65P" = "age >= 65 | is.na(age)",
-          "Total" = "age >= 0 | is.na(age)"
-        )
-        MOMOmodels <- c(
-          "0to4" = "LINE",
-          "5to14" = "LINE",
-          "15to64" = "LINE_SIN",
-          "65P" = "LINE_SIN",
-          "Total" = "LINE_SIN"
-        )
-      } else {
-        plotGraphs <- FALSE
-        MOMOgroups <- list(
-          "Total" = "age >= 0 | is.na(age)"
-        )
-        MOMOmodels <- c(
-          "Total" = "LINE_SIN"
-        )
-      }
-
-      momo::SetOpts(
-        DoA = dateData,
-        DoPR = as.Date("2012-1-1"),
-        WStart = 1,
-        WEnd = 52,
-        country = runName,
-        source = "FHI",
-        MFILE = "data.txt",
-        HFILE = "bank_holidays.txt",
-        INPUTDIR = DashboardFolder("data_clean"),
-        WDIR = DashboardFolder("results",file.path(RAWmisc::YearWeek(dateDataMinusOneWeek),"MOMO")),
-        back = 7,
-        WWW = 290,
-        Ysum = lubridate::year(dateDataMinusOneWeek),
-        Wsum = 40,
-        plotGraphs = plotGraphs,
-        MOMOgroups = MOMOgroups,
-        MOMOmodels = MOMOmodels,
-        verbose=FALSE)
-
-      momo::RunMoMo()
-
-      data <- rbindlist(momo::dataExport$toSave, fill=TRUE)
-
-      allResults[[i+1]] <- data
-      allResults[[i+1]][,name:=runName]
-      data <- data[,c("GROUP","wk","wk2","YoDi","WoDi","Pnb","nb","nbc","UPIb2","UPIb4","UPIc","LPIc","UCIc","LCIc","zscore"),with=F]
-      data[,id:=paste0(GROUP,wk,wk2)]
-
-      if(runName=="Norway"){
-        if(file.exists(DashboardFolder("results","censoring.RDS"))){
-          oldCensoring <- readRDS(DashboardFolder("results","censoring.RDS"))
-          data <- merge(data,oldCensoring[,c("id","randomNoise"),with=F],by="id",all.x=TRUE)
-        } else {
-          data[,randomNoise:=as.numeric(NA)]
-        }
-        data[is.na(randomNoise),randomNoise:=as.numeric(sample(c(-3:3),size=.N,replace=TRUE))]
-        saveRDS(data,DashboardFolder("results","censoring.RDS"))
-        data[,nbc:=fhi::Censor(n=nbc,randomNoise=randomNoise,boundaries=list(data$UPIb2,data$UPIb4))]
-        data[,nb:=fhi::Censor(n=nb,randomNoise=randomNoise,boundaries=list(data$UPIb2,data$UPIb4))]
-      }
-      minCorrectedWeek <- min(data[!is.na(UPIc)]$wk)
-      data[is.na(UPIc) | UPIc < nbc,UPIc:=nbc]
-      data[is.na(LPIc) | LPIc > nbc,LPIc:=nbc]
-      data[wk >= minCorrectedWeek & UPIc==0,UPIc:=1]
-      data[wk >= minCorrectedWeek & !is.na(UPIc),UPIc:=UPIc+3]
-      data[wk >= minCorrectedWeek & !is.na(LPIc),LPIc:=LPIc-3]
-      data[LPIc<0,LPIc:=0]
-
-      data[,excess:=nbc-Pnb]
-
-      saveRDS(data,DashboardFolder("results",file.path(RAWmisc::YearWeek(dateDataMinusOneWeek),"Data",paste0(runName,".RDS"))))
-      if(runName=="Norway"){
-        saveRDS(data,DashboardFolder("data_app","data.RDS"))
-      }
-      RunTemporaryGraphs(runName=runName,masterData=data,folder=fhi::DashboardFolder("results",file.path(RAWmisc::YearWeek(dateDataMinusOneWeek),"Graphs")), yearWeek=RAWmisc::YearWeek(dateDataMinusOneWeek), dateData=dateData)
-
-      RAWmisc::ProgressBarSet(pb,i)
-    }
-
-    allResults <- rbindlist(allResults)
-    cat(sprintf("%s/%s/R/NORMOMO Saving data_processed.xlsx",Sys.time(),Sys.getenv("COMPUTER")),"\n")
-    openxlsx::write.xlsx(allResults,DashboardFolder("results",file.path(RAWmisc::YearWeek(dateDataMinusOneWeek),"Data","data_processed.xlsx")))
-
-    ## Grid graph
-    RunStatusTiles(allResults=allResults,folder=fhi::DashboardFolder("results",file.path(RAWmisc::YearWeek(dateDataMinusOneWeek),"Graphs")), yearWeek=RAWmisc::YearWeek(dateDataMinusOneWeek), dateData=dateData)
-
-    ## extracting out raw data for later work
-    masterData[,ageCat:=cut(age,c(0,4,14,64,200),include.lowest = TRUE)]
-    masterData[,deathWeek:=momo:::isoweek(masterData$DoD, type="week")]
-    masterData[,deathYear:=momo:::isoweek(masterData$DoD, type="year")]
-
-    temp <- masterData[,.(N=.N),by=.(deathYear,deathWeek,FYLKE,ageCat)]
-    skeleton <- data.table(expand.grid(
-      deathYear=unique(temp$deathYear),
-      deathWeek=unique(temp$deathWeek),
-      FYLKE=unique(temp$FYLKE),
-      ageCat=unique(temp$ageCat)))
-
-    skeleton[,yd:=paste0(deathYear,"-",deathWeek)]
-    temp[,yd:=paste0(deathYear,"-",deathWeek)]
-    skeleton <- skeleton[yd %in% unique(temp$yd)]
-    skeleton[,yd:=NULL]
-    temp[,yd:=NULL]
-
-    temp <- merge(temp,skeleton,all.y=T,by=c("deathYear","deathWeek","FYLKE","ageCat"))
-    temp[is.na(N),N:=0]
-    temp[,location:=as.character(FYLKE)]
-    tempAll <- temp[,.(N=sum(N)),by=.(deathYear,deathWeek,ageCat)]
-    tempAll[,location:="Norway"]
-    temp <- temp[FYLKE %in% VALID_FYLKE]
-    temp[,FYLKE:=NULL]
-    temp <- rbind(temp,tempAll)
-    temp[,ageCat:=as.character(ageCat)]
-    tempAll <- temp[,.(N=sum(N)),by=.(deathYear,deathWeek,location)]
-    tempAll[,ageCat:="Total"]
-    temp <- rbind(temp,tempAll)
-    temp[,ageCat:=factor(ageCat,levels=c("[0,4]","(4,14]","(14,64]","(64,200]","Total"))]
-    temp[,location:=factor(location,levels=c(VALID_FYLKE,"Norway"))]
-    setcolorder(temp,c("deathYear","deathWeek","ageCat","location","N"))
-    setorder(temp,deathYear,deathWeek,ageCat,location)
-
-    cat(sprintf("%s/%s/R/NORMOMO Saving data_raw.xlsx",Sys.time(),Sys.getenv("COMPUTER")),"\n")
-    openxlsx::write.xlsx(temp,DashboardFolder("results",file.path(RAWmisc::YearWeek(dateDataMinusOneWeek),"Data","data_raw.xlsx")))
-
-    cat(sprintf("%s/%s/R/NORMOMO Zipping results",Sys.time(),Sys.getenv("COMPUTER")),"\n")
-    ZipResults(
-      folderResults=fhi::DashboardFolder("results"),
-	  folderResultsYearWeek=fhi::DashboardFolder("results",RAWmisc::YearWeek(dateDataMinusOneWeek)),
-	  folderResultsZip=fhi::DashboardFolder("results",paste0("archive_",RAWmisc::YearWeek(dateDataMinusOneWeek),".zip")),
-	  folderDataAppZip=fhi::DashboardFolder("data_app",paste0("archive_",RAWmisc::YearWeek(dateDataMinusOneWeek),".zip"))
+  data <- CleanExportedMOMOData(
+    data=data,
+    s=s
     )
 
-    if(Sys.getenv("COMPUTER")=="smhb"){
-      TEST_EMAILS <- FALSE
-    } else {
-      TEST_EMAILS <- TRUE
-    }
-    EmailInternal(folderResultsYearWeek=file.path(fhi::DashboardFolder("results",RAWmisc::YearWeek(dateDataMinusOneWeek))),
-                  isTest=TEST_EMAILS)
-    EmailSSI(folderResultsYearWeek=file.path(fhi::DashboardFolder("results",RAWmisc::YearWeek(dateDataMinusOneWeek))),
-             isTest=TEST_EMAILS)
-
+  saveRDS(data,s[["MOMOFolderResultsData"]])
+  if(s[["runName"]]=="Norway"){
+    saveRDS(data,DashboardFolder("data_app","data.RDS"))
   }
 
-  cat(sprintf("%s/%s/R/NORMOMO Exited successfully",Sys.time(),Sys.getenv("COMPUTER")),"\n")
-  quit(save="no", status=0)
+  RunTemporaryGraphs(
+    runName=s[["runName"]],
+    masterData=data,
+    folder=s[["MOMOFolderResultsGraphsOldStyle"]],
+    yearWeek=RAWmisc::YearWeek(s[["dateDataMinusOneWeek"]]),
+    dateData=s[["dateData"]]
+  )
 
-}, warning=function(war) {
-  cat("R/NORMOMO","WARN",paste0("UNEXPECTED exit with warning: ",war),"\n")
-  quit(save="no", status=1)
-}, error=function(err) {
-  cat("R/NORMOMO","ERROR",paste0("UNEXPECTED exit with error: ",err),"\n")
-  quit(save="no", status=1)
-}, finally={
+  RunGraphs(
+    runName=s[["runName"]],
+    data=data,
+    folder=s[["MOMOFolderResultsGraphsNewStyle"]],
+    yearWeek=RAWmisc::YearWeek(s[["dateDataMinusOneWeek"]]),
+    dateData=s[["dateData"]]
+  )
+
+  RAWmisc::ProgressBarSet(pb,i)
 }
+
+allResults <- rbindlist(allResults)
+cat(sprintf("%s/%s/R/NORMOMO Saving data_processed.xlsx",Sys.time(),Sys.getenv("COMPUTER")),"\n")
+openxlsx::write.xlsx(allResults,DashboardFolder("results",file.path(RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),"Data","data_processed.xlsx")))
+
+## Grid graph
+RunStatusTiles(allResults=allResults,
+               folder=fhi::DashboardFolder("results",file.path(RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),"Graphs_new_style")),
+               yearWeek=RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),
+               dateData=info[["dateData"]])
+
+RunStatusTiles(allResults=allResults,
+               folder=fhi::DashboardFolder("results",file.path(RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),"Graphs_old_style")),
+               yearWeek=RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),
+               dateData=info[["dateData"]])
+
+SavingRawData(
+  dateDataMinusOneWeek=info[["dateDataMinusOneWeek"]],
+  masterData=masterData
 )
 
-#saveRDS(dates,file="/log/status_normomo.RDS")
+cat(sprintf("%s/%s/R/NORMOMO Zipping results",Sys.time(),Sys.getenv("COMPUTER")),"\n")
+ZipResults(
+  folderResults=fhi::DashboardFolder("results"),
+folderResultsYearWeek=fhi::DashboardFolder("results",RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]])),
+folderResultsZip=fhi::DashboardFolder("results",paste0("archive_",RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),".zip")),
+folderDataAppZip=fhi::DashboardFolder("data_app",paste0("archive_",RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),".zip"))
+)
 
+if(Sys.getenv("COMPUTER")=="smhb"){
+  TEST_EMAILS <- FALSE
+} else {
+  TEST_EMAILS <- TRUE
+}
+EmailInternal(folderResultsYearWeek=file.path(fhi::DashboardFolder("results",RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]))),
+              isTest=TEST_EMAILS)
+EmailSSI(folderResultsYearWeek=file.path(fhi::DashboardFolder("results",RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]))),
+         isTest=TEST_EMAILS)
+
+cat(sprintf("%s/%s/R/NORMOMO Exited successfully",Sys.time(),Sys.getenv("COMPUTER")),"\n")
+quit(save="no", status=0)
