@@ -187,6 +187,9 @@ if(!UpdateData()){
           #saveRDS(analysisIter$stack,"/results/sykdomspulen/analysesStack.RDS")
           #saveRDS(analysisIter$data,"/results/sykdomspulen/analysisData.RDS")
         }
+        #x <- analysisIter$nextElem()
+        #analysesStack=x$stack
+        #analysisData=x$data
         retval <- tryCatch(
           RunOneAnalysis(analysesStack=analysisIter$stack,analysisData=analysisIter$data),
           error=exceptionalFunction
