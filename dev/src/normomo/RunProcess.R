@@ -144,7 +144,7 @@ for(i in 1:nrow(stack)){
   RAWmisc::ProgressBarSet(pb,i)
 }
 
-allPlotData <- rbindlist(allPlotData,fill=T)
+#allPlotData <- rbindlist(allPlotData,fill=T)
 
 allResults <- rbindlist(allResults)
 cat(sprintf("%s/%s/R/NORMOMO Saving data_processed.xlsx",Sys.time(),Sys.getenv("COMPUTER")),"\n")
