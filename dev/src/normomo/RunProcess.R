@@ -152,12 +152,12 @@ openxlsx::write.xlsx(allResults,DashboardFolder("results",file.path(RAWmisc::Yea
 
 ## Grid graph
 RunStatusTiles(allResults=allResults,
-               folder=fhi::DashboardFolder("results",file.path(RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),"MOMOFolderResultsGraphsWithUnreliable")),
+               folder=fhi::DashboardFolder("results",file.path(RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),s[["MOMOFolderResultsGraphsWithUnreliable"]])),
                yearWeek=RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),
                dateData=info[["dateData"]])
 
 RunStatusTiles(allResults=allResults,
-               folder=fhi::DashboardFolder("results",file.path(RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),"MOMOFolderResultsGraphsDeleteUnreliable")),
+               folder=fhi::DashboardFolder("results",file.path(RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),s[["MOMOFolderResultsGraphsDeleteUnreliable"]])),
                yearWeek=RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),
                dateData=info[["dateData"]])
 
