@@ -148,16 +148,16 @@ for(i in 1:nrow(stack)){
 
 allResults <- rbindlist(allResults)
 cat(sprintf("%s/%s/R/NORMOMO Saving data_processed.xlsx",Sys.time(),Sys.getenv("COMPUTER")),"\n")
-openxlsx::write.xlsx(allResults,DashboardFolder("results",file.path(RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),"Data","data_processed.xlsx")))
+openxlsx::write.xlsx(allResults,DashboardFolder("results",file.path(RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),"data","data_processed.xlsx")))
 
 ## Grid graph
 RunStatusTiles(allResults=allResults,
-               folder=fhi::DashboardFolder("results",file.path(RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),s[["MOMOFolderResultsGraphsWithUnreliable"]])),
+               folder=fhi::DashboardFolder("results",file.path(RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),"graphs_with_unreliable")),
                yearWeek=RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),
                dateData=info[["dateData"]])
 
 RunStatusTiles(allResults=allResults,
-               folder=fhi::DashboardFolder("results",file.path(RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),s[["MOMOFolderResultsGraphsDeleteUnreliable"]])),
+               folder=fhi::DashboardFolder("results",file.path(RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),"graphs_delete_unreliable")),
                yearWeek=RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),
                dateData=info[["dateData"]])
 
