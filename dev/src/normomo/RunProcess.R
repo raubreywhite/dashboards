@@ -23,6 +23,12 @@ fhi::DashboardInitialise(
   NAME="normomo"
 )
 
+# Set up data
+
+hfile <- data.frame(readxl::read_excel(system.file("extdata", "bank_holidays.xlsx", package = "normomo"))[,c("date", "closed")])
+hfile$date <- as.Date(hfile$date)
+#fwrite(hfile,file=DashboardFolder("data_clean","bank_holidays.txt"))
+
 info <- GetDataInfo()
 
 masterData <- GetData(
@@ -31,24 +37,85 @@ masterData <- GetData(
   forceRun=forceRun
   )
 
+# Set up folders
 SetupFolders(dateDataMinusOneWeek=info[["dateDataMinusOneWeek"]])
 
+# Plan out analyses
 stack <- GenerateStack(
   f=info[["f"]],
   dateDataMinusOneWeek=info[["dateDataMinusOneWeek"]],
   dateData=info[["dateData"]]
   )
 
-pb <- RAWmisc::ProgressBarCreate(min=0,max=nrow(stack),flush=TRUE)
+stackStatistics <- stack[["stackStatistics"]]
+stackAnalyses <- stack[["stackAnalyses"]]
+
+#### STATISTICS
+pb <- RAWmisc::ProgressBarCreate(min=0,max=nrow(stackStatistics),flush=TRUE)
+allPlotData <- vector("list",length=nrow(stackStatistics))
+dataAnalysis <- as.data.frame(masterData[!is.na(age),c("DoD","DoR","age"),with=F])
+
+for(i in 1:nrow(stackStatistics)){
+  RAWmisc::ProgressBarSet(pb,i)
+
+  s <- stackStatistics[i,]
+
+  momo::SetOpts(
+    DoA = s[["dateData"]],
+    DoPR = as.Date("2012-1-1"),
+    WStart = 1,
+    WEnd = 52,
+    country = s[["runName"]],
+    source = "FHI",
+    MDATA = dataAnalysis,
+    HDATA = hfile,
+    INPUTDIR = s[["MOMOFolderInput"]],
+    WDIR = tempdir(),
+    back = 7,
+    WWW = 290,
+    Ysum = s[["MOMOYsum"]],
+    Wsum = 40,
+    plotGraphs = FALSE,
+    delayVersion = s[["delayVersion"]],
+    MOMOgroups = s[["MOMOgroups"]][[1]],
+    MOMOmodels = s[["MOMOmodels"]][[1]],
+    verbose=FALSE)
+
+  momo::RunMoMo()
+
+  dataToSave <- rbindlist(momo::dataExport$toSave, fill=TRUE)
+
+  #dataToSave[GROUP=="Total" & nbc!=nb]
+
+  data <- CleanExportedMOMOData(
+    data=dataToSave,
+    s=s
+  )
+
+  allPlotData[[i]] <- data
+  allPlotData[[i]][,DoA:=s[["dateData"]]]
+  allPlotData[[i]][,delayVersion:=s[["delayVersion"]]]
+}
+
+allPlotData <- rbindlist(allPlotData)[!is.na(excess)]
+
+
+RunGraphsStatistics(
+  runName=s[["runName"]],
+  allPlotData=allPlotData,
+  folder=s[["MOMOFolderResultsGraphsStatistics"]],
+  yearWeek=RAWmisc::YearWeek(s[["dateDataMinusOneWeek"]]),
+  dateData=max(s[["dateData"]][[1]])
+)
+
+### ANALYSES
+pb <- RAWmisc::ProgressBarCreate(min=0,max=nrow(stackAnalyses),flush=TRUE)
 allResults <- vector("list",100)
 
-hfile <- data.frame(readxl::read_excel(system.file("extdata", "bank_holidays.xlsx", package = "normomo"))[,c("date", "closed")])
-hfile$date <- as.Date(hfile$date)
-fwrite(hfile,file=DashboardFolder("data_clean","bank_holidays.txt"))
+for(i in 1:nrow(stackAnalyses)){
+  RAWmisc::ProgressBarSet(pb,i)
 
-
-for(i in 1:nrow(stack)){
-  s <- stack[i,]
+  s <- stackAnalyses[i,]
 
   if(s[["runName"]]=="Norway"){
     dataAnalysis <- as.data.frame(masterData[!is.na(age),
@@ -59,50 +126,40 @@ for(i in 1:nrow(stack)){
                                              c("DoD","DoR","age"),with=F])
     plotGraphs <- FALSE
   }
-  saveRDS(dataAnalysis,file=s[["data_clean_name"]])
-  saveRDS(dataAnalysis,file=DashboardFolder("data_clean","data.RDS"))
-  fwrite(dataAnalysis,file=DashboardFolder("data_clean","data.txt"))
+  #saveRDS(dataAnalysis,file=s[["data_clean_name"]])
+  #saveRDS(dataAnalysis,file=DashboardFolder("data_clean","data.RDS"))
+  #fwrite(dataAnalysis,file=DashboardFolder("data_clean","data.txt"))
 
-  allPlotData <- list()
-  numHistoricAnalyses <- length(s[["dateData"]][[1]])
-  for(j in 1:numHistoricAnalyses){
-    if(Sys.getenv("RSTUDIO") == "1") print(j)
 
-    DoA <- as.Date(s[["dateData"]][[1]][j],origin="1970-01-01")
-    momo::SetOpts(
-      DoA = DoA,
-      DoPR = as.Date("2012-1-1"),
-      WStart = 1,
-      WEnd = 52,
-      country = s[["runName"]],
-      source = "FHI",
-      MFILE = "data.txt",
-      HFILE = "bank_holidays.txt",
-      INPUTDIR = s[["MOMOFolderInput"]],
-      WDIR = s[["MOMOFolderResults"]],
-      back = 7,
-      WWW = 290,
-      Ysum = s[["MOMOYsum"]],
-      Wsum = 40,
-      plotGraphs = ifelse(j==numHistoricAnalyses,s[["plotGraphs"]],FALSE),
-      MOMOgroups = s[["MOMOgroups"]][[1]],
-      MOMOmodels = s[["MOMOmodels"]][[1]],
-      verbose=FALSE)
+  momo::SetOpts(
+    DoA = s[["dateData"]],
+    DoPR = as.Date("2012-1-1"),
+    WStart = 1,
+    WEnd = 52,
+    country = s[["runName"]],
+    source = "FHI",
+    MDATA = dataAnalysis,
+    HDATA = hfile,
+    INPUTDIR = s[["MOMOFolderInput"]],
+    WDIR = s[["MOMOFolderResults"]],
+    back = 7,
+    WWW = 290,
+    Ysum = s[["MOMOYsum"]],
+    Wsum = 40,
+    plotGraphs = s[["plotGraphs"]],
+    delayVersion = "original",
+    MOMOgroups = s[["MOMOgroups"]][[1]],
+    MOMOmodels = s[["MOMOmodels"]][[1]],
+    verbose=FALSE)
 
-    momo::RunMoMo()
+  momo::RunMoMo()
 
-    dataToSave <- rbindlist(momo::dataExport$toSave, fill=TRUE)
+  dataToSave <- rbindlist(momo::dataExport$toSave, fill=TRUE)
 
-    data <- CleanExportedMOMOData(
-      data=dataToSave,
-      s=s
-    )
-
-    allPlotData[[j]] <- data
-    allPlotData[[j]][,DoA:=DoA]
-  }
-
-  allPlotData <- rbindlist(allPlotData)
+  data <- CleanExportedMOMOData(
+    data=dataToSave,
+    s=s
+  )
 
   allResults[[i]] <- dataToSave
   allResults[[i]][,name:=s[["runName"]]]
@@ -115,7 +172,6 @@ for(i in 1:nrow(stack)){
   RunGraphsDeaths(
     runName=s[["runName"]],
     data=data,
-    allPlotData=allPlotData,
     folder=s[["MOMOFolderResultsGraphsWithUnreliable"]],
     yearWeek=RAWmisc::YearWeek(s[["dateDataMinusOneWeek"]]),
     dateData=max(s[["dateData"]][[1]]),
@@ -125,26 +181,12 @@ for(i in 1:nrow(stack)){
   RunGraphsDeaths(
     runName=s[["runName"]],
     data=data,
-    allPlotData=allPlotData,
     folder=s[["MOMOFolderResultsGraphsDeleteUnreliable"]],
     yearWeek=RAWmisc::YearWeek(s[["dateDataMinusOneWeek"]]),
     dateData=max(s[["dateData"]][[1]]),
     dateReliable=max(s[["dateData"]][[1]])-CONFIG$WEEKS_UNRELIABLE*7
   )
-
-  RunGraphsStatistics(
-    runName=s[["runName"]],
-    data=data,
-    allPlotData=allPlotData,
-    folder=s[["MOMOFolderResultsGraphsStatistics"]],
-    yearWeek=RAWmisc::YearWeek(s[["dateDataMinusOneWeek"]]),
-    dateData=max(s[["dateData"]][[1]])
-  )
-
-  RAWmisc::ProgressBarSet(pb,i)
 }
-
-#allPlotData <- rbindlist(allPlotData,fill=T)
 
 allResults <- rbindlist(allResults)
 cat(sprintf("%s/%s/R/NORMOMO Saving data_processed.xlsx",Sys.time(),Sys.getenv("COMPUTER")),"\n")
