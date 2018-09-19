@@ -99,6 +99,7 @@ for(i in 1:nrow(stackStatistics)){
 
 allPlotData <- rbindlist(allPlotData)[!is.na(excess)]
 
+print(allPlotData)
 
 RunGraphsStatistics(
   runName=s[["runName"]],
