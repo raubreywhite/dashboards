@@ -32,7 +32,7 @@ hfile$date <- as.Date(hfile$date)
 info <- GetDataInfo()
 
 masterData <- GetData(
-  fClean=info[["fClean"]],
+  fDone=info[["fDone"]],
   f=info[["f"]],
   forceRun=forceRun
   )
@@ -51,6 +51,9 @@ stackStatistics <- stack[["stackStatistics"]]
 stackAnalyses <- stack[["stackAnalyses"]]
 
 #### STATISTICS
+
+print("STARTING STATISTICS")
+
 pb <- RAWmisc::ProgressBarCreate(min=0,max=nrow(stackStatistics),flush=TRUE)
 allPlotData <- vector("list",length=nrow(stackStatistics))
 dataAnalysis <- as.data.frame(masterData[!is.na(age),c("DoD","DoR","age"),with=F])
@@ -110,6 +113,8 @@ RunGraphsStatistics(
 )
 
 ### ANALYSES
+print("STARTING ANALYSES")
+
 pb <- RAWmisc::ProgressBarCreate(min=0,max=nrow(stackAnalyses),flush=TRUE)
 allResults <- vector("list",100)
 
@@ -227,6 +232,8 @@ EmailInternal(folderResultsYearWeek=file.path(fhi::DashboardFolder("results",RAW
 EmailSSI(folderResultsYearWeek=file.path(fhi::DashboardFolder("results",RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]))),
          dateReliable=info$dateData-CONFIG$WEEKS_UNRELIABLE*7,
          isTest=TEST_EMAILS)
+
+CreateLatestDoneFile(f=info$f)
 
 cat(sprintf("%s/%s/R/NORMOMO Exited successfully",Sys.time(),Sys.getenv("COMPUTER")),"\n")
 quit(save="no", status=0)
