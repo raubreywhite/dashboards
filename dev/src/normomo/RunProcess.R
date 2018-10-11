@@ -207,7 +207,7 @@ for(i in 1:nrow(stackStatistics)){
   if(s[["delayVersion"]]=="richard"){
     df <- custom_delayMOMO_richard
   } else {
-    next
+    #next
   }
 
   MOMO::SetOpts(
@@ -221,7 +221,7 @@ for(i in 1:nrow(stackStatistics)){
     HDATA = hfile,
     INPUTDIR = s[["MOMOFolderInput"]],
     WDIR = tempdir(),
-    back = 4,
+    back = 7,
     WWW = 290,
     Ysum = s[["MOMOYsum"]],
     Wsum = 40,
