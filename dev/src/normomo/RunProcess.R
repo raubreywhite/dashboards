@@ -341,7 +341,7 @@ openxlsx::write.xlsx(allResults,DashboardFolder("results",file.path(RAWmisc::Yea
 
 ## Grid graph
 RunStatusTiles(allResults=allResults,
-               folder=fhi::DashboardFolder("results",file.path(RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),s[["MOMOFolderResultsGraphsStatistics"]])),
+               folder=s[["MOMOFolderResultsGraphsStatus"]],
                yearWeek=RAWmisc::YearWeek(info[["dateDataMinusOneWeek"]]),
                dateData=info[["dateData"]])
 
